@@ -215,12 +215,19 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	senderName := ""
+	if sender, err := h.auth.GetUserByID(userID); err == nil {
+		senderName = sender.Username
+		msg.SenderName = senderName
+	}
+
 	// Broadcast via WebSocket if receiver is connected
 	wsMsg := messaging.WSOutgoingMessage{
 		Type:      "message",
 		Timestamp: msg.CreatedAt,
 		Payload: map[string]interface{}{
 			"sender_id":   msg.SenderID,
+			"sender_name": senderName,
 			"receiver_id": msg.ReceiverID,
 			"channel_id":  msg.ChannelID,
 			"content":     msg.Content,
@@ -246,6 +253,7 @@ func (h *APIHandler) GetMessageHistory(w http.ResponseWriter, r *http.Request) {
 
 	limit := 50
 	beforeID := ""
+	channelID := r.URL.Query().Get("channel_id")
 
 	if l := r.URL.Query().Get("limit"); l != "" {
 		fmt.Sscanf(l, "%d", &limit)
@@ -255,18 +263,43 @@ func (h *APIHandler) GetMessageHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	beforeID = r.URL.Query().Get("before")
+	if beforeID == "" {
+		beforeID = r.URL.Query().Get("cursor")
+	}
 
-	messages, err := h.msgSvc.GetMessageHistory(userID, limit, beforeID)
+	fetchLimit := limit + 1
+	var messages []*types.Message
+	var err error
+
+	if channelID != "" {
+		messages, err = h.msgSvc.GetChannelMessages(channelID, fetchLimit, beforeID)
+	} else {
+		messages, err = h.msgSvc.GetMessageHistory(userID, fetchLimit, beforeID)
+	}
 	if err != nil {
 		log.Printf("Get messages error: %v", err)
 		h.writeError(w, "Failed to get messages", http.StatusInternalServerError)
 		return
 	}
 
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+
+	reverseMessages(messages)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"messages": messages,
+		"has_more": hasMore,
 	})
+}
+
+func reverseMessages(messages []*types.Message) {
+	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+		messages[i], messages[j] = messages[j], messages[i]
+	}
 }
 
 // HandleWebSocket handles WebSocket connections

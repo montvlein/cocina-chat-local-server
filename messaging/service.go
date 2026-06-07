@@ -81,19 +81,21 @@ func (s *MessageService) GetMessageHistory(userID string, limit int, beforeID st
 	return messages, nil
 }
 
-// GetChannelMessages retrieves messages for a specific channel
+// GetChannelMessages retrieves messages for a specific channel with sender info
 func (s *MessageService) GetChannelMessages(channelID string, limit int, beforeID string) ([]*types.Message, error) {
-	query := `SELECT id, sender_id, receiver_id, channel_id, content, content_type, created_at 
-	          FROM messages WHERE channel_id = ?`
+	query := `SELECT m.id, m.sender_id, u.username, m.receiver_id, m.channel_id, m.content, m.content_type, m.created_at
+	          FROM messages m
+	          JOIN users u ON u.id = m.sender_id
+	          WHERE m.channel_id = ?`
 
 	args := []interface{}{channelID}
 
 	if beforeID != "" {
-		query += " AND id < ?"
+		query += ` AND m.created_at < (SELECT created_at FROM messages WHERE id = ?)`
 		args = append(args, beforeID)
 	}
 
-	query += " ORDER BY created_at DESC LIMIT ?"
+	query += ` ORDER BY m.created_at DESC LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := s.db.Query(query, args...)
@@ -106,7 +108,16 @@ func (s *MessageService) GetChannelMessages(channelID string, limit int, beforeI
 	for rows.Next() {
 		var msg types.Message
 		var createdAtStr string
-		err := rows.Scan(&msg.ID, &msg.SenderID, &msg.ReceiverID, &msg.ChannelID, &msg.Content, &msg.ContentType, &createdAtStr)
+		err := rows.Scan(
+			&msg.ID,
+			&msg.SenderID,
+			&msg.SenderName,
+			&msg.ReceiverID,
+			&msg.ChannelID,
+			&msg.Content,
+			&msg.ContentType,
+			&createdAtStr,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}

@@ -16,6 +16,7 @@ type User struct {
 type Message struct {
 	ID          string    `json:"id"`
 	SenderID    string    `json:"sender_id"`
+	SenderName  string    `json:"sender_name,omitempty"`
 	ReceiverID  string    `json:"receiver_id,omitempty"`
 	ChannelID   string    `json:"channel_id,omitempty"`
 	Content     string    `json:"content"`
