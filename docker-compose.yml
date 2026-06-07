@@ -1,0 +1,26 @@
+services:
+  # Cocina Server MVP - Go backend application
+  cocina-server:
+    build: .
+    container_name: cocina-server
+    ports:
+      - "8090:8090"
+    volumes:
+      # Mount SQLite database directory for persistence
+      - ./data:/app/data
+    environment:
+      - COCINA_PORT=8090
+      - COCINA_DB_PATH=/app/data/cocina.db
+      - COCINA_JWT_SECRET=${COCINA_JWT_SECRET:-cocina-mvp-secret-key-change-in-production}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Note: SQLite is a file-based database that doesn't run as a separate service.
+# The SQLite data directory is mounted via volumes above for persistence.
+# If you need a server-based database (PostgreSQL, MySQL), replace the volume mount
+# with an appropriate database service configuration.
