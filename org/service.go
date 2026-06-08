@@ -317,6 +317,53 @@ func (s *Service) addUserToOrg(userID, orgID, role string) error {
 	return err
 }
 
+// HelloState contains bootstrap data for WebSocket hello event.
+type HelloState struct {
+	Workspaces []types.Workspace
+	Channels   []types.Channel
+}
+
+// BuildHelloForUser returns workspaces and channels accessible to the user on this server.
+func (s *Service) BuildHelloForUser(userID string) (*HelloState, error) {
+	rows, err := s.db.Query(`
+		SELECT w.id, w.org_id, w.name, w.slug, COALESCE(w.description, ''), w.is_default, w.created_at
+		FROM workspaces w
+		JOIN workspace_members wm ON wm.workspace_id = w.id
+		WHERE wm.user_id = ?
+		ORDER BY w.is_default DESC, w.name ASC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	state := &HelloState{
+		Workspaces: []types.Workspace{},
+		Channels:   []types.Channel{},
+	}
+
+	for rows.Next() {
+		var ws types.Workspace
+		var createdAt string
+		var isDefault int
+		if err := rows.Scan(
+			&ws.ID, &ws.OrgID, &ws.Name, &ws.Slug, &ws.Description, &isDefault, &createdAt,
+		); err != nil {
+			return nil, err
+		}
+		ws.IsDefault = isDefault == 1
+		ws.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		state.Workspaces = append(state.Workspaces, ws)
+
+		channels, err := s.ListChannels(userID, ws.ID)
+		if err != nil {
+			continue
+		}
+		state.Channels = append(state.Channels, channels...)
+	}
+
+	return state, nil
+}
+
 func (s *Service) username(userID string) (string, error) {
 	var name string
 	err := s.db.QueryRow(`SELECT username FROM users WHERE id = ?`, userID).Scan(&name)

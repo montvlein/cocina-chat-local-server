@@ -33,13 +33,15 @@ func (h *APIHandler) writePaginated(w http.ResponseWriter, data interface{}, met
 }
 
 func (h *APIHandler) writeAPIError(w http.ResponseWriter, r *http.Request, code, message string, status int) {
+	reqID := requestID(r)
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Request-ID", reqID)
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(types.APIErrorResponse{
 		Error: types.APIErrorBody{
 			Code:      code,
 			Message:   message,
-			RequestID: requestID(r),
+			RequestID: reqID,
 		},
 	})
 }

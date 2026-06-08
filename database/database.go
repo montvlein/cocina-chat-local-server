@@ -146,6 +146,14 @@ func (d *Database) initSchema() error {
 		user_b TEXT NOT NULL,
 		UNIQUE(workspace_id, user_a, user_b)
 	);
+
+	CREATE TABLE IF NOT EXISTS message_receipts (
+		message_id TEXT NOT NULL REFERENCES messages(id),
+		user_id TEXT NOT NULL REFERENCES users(id),
+		delivered_at DATETIME,
+		read_at DATETIME,
+		PRIMARY KEY (message_id, user_id)
+	);
 	`
 
 	_, err := d.conn.Exec(schema)
@@ -162,6 +170,10 @@ func (d *Database) initSchema() error {
 
 	// Migrate legacy channel ids
 	_, _ = d.conn.Exec(`UPDATE messages SET channel_id = 'ch_general' WHERE channel_id = 'general'`)
+
+	if err := migrateUserIDsToUUID(d.conn); err != nil {
+		log.Printf("Warning: user UUID migration failed: %v", err)
+	}
 
 	return nil
 }

@@ -1,12 +1,12 @@
 package auth
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"time"
 
+	"github.com/cocina/server-mvp/ids"
 	"github.com/cocina/server-mvp/types"
 )
 
@@ -197,11 +197,6 @@ func verifyPassword(password, hash string) bool {
 	return computedHash == hash
 }
 
-// generateUniqueID generates a cryptographically secure unique ID
 func generateUniqueID() (string, error) {
-	bytes := make([]byte, 16)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return fmt.Sprintf("user_%x", bytes), nil
+	return ids.NewUUID(), nil
 }

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/cocina/server-mvp/auth"
 	"github.com/cocina/server-mvp/messaging"
@@ -41,6 +40,8 @@ func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub, serverURL string) *APIHandl
 	orgSvc := org.NewService(db, serverURL)
 
 	wsHub.SetAuthService(authSvc)
+	wsHub.SetOrgService(orgSvc)
+	wsHub.SetMessageService(msgSvc)
 
 	return &APIHandler{
 		db:     db,
@@ -54,7 +55,7 @@ func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub, serverURL string) *APIHandl
 // Register handles user registration
 func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeAPIError(w, r, "METHOD_NOT_ALLOWED", "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -66,19 +67,19 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if req.Email == "" || req.Username == "" || req.Password == "" {
-		h.writeError(w, "Email, username and password are required", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Email, username and password are required", http.StatusBadRequest)
 		return
 	}
 
 	resp, err := h.auth.Register(req.Email, req.Username, req.Password)
 	if err != nil {
 		log.Printf("Registration error: %v", err)
-		h.writeError(w, err.Error(), http.StatusConflict)
+		h.writeAPIError(w, r, "CONFLICT", err.Error(), http.StatusConflict)
 		return
 	}
 
@@ -94,7 +95,7 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 // Login handles user login
 func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeAPIError(w, r, "METHOD_NOT_ALLOWED", "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -104,14 +105,14 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	resp, err := h.auth.Login(req.Email, req.Password)
 	if err != nil {
 		log.Printf("Login error: %v", err)
-		h.writeError(w, "Invalid credentials", http.StatusUnauthorized)
+		h.writeAPIError(w, r, "UNAUTHORIZED", "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
@@ -126,7 +127,7 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 // RefreshToken handles token refresh (simplified for MVP)
 func (h *APIHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeAPIError(w, r, "METHOD_NOT_ALLOWED", "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -135,7 +136,7 @@ func (h *APIHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -151,7 +152,7 @@ func (h *APIHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 // Logout handles user logout
 func (h *APIHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeAPIError(w, r, "METHOD_NOT_ALLOWED", "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -160,7 +161,7 @@ func (h *APIHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
@@ -175,13 +176,13 @@ func (h *APIHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *APIHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	userID := h.extractUserID(r)
 	if userID == "" {
-		h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+		h.writeAPIError(w, r, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	user, err := h.auth.GetUserByID(userID)
 	if err != nil {
-		h.writeError(w, "User not found", http.StatusNotFound)
+		h.writeAPIError(w, r, "NOT_FOUND", "User not found", http.StatusNotFound)
 		return
 	}
 
@@ -193,12 +194,12 @@ func (h *APIHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 func (h *APIHandler) UpdatePresence(w http.ResponseWriter, r *http.Request) {
 	userID := h.extractUserID(r)
 	if userID == "" {
-		h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+		h.writeAPIError(w, r, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	if r.Method != http.MethodPatch && r.Method != http.MethodPut {
-		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeAPIError(w, r, "METHOD_NOT_ALLOWED", "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -206,14 +207,14 @@ func (h *APIHandler) UpdatePresence(w http.ResponseWriter, r *http.Request) {
 		Status string `json:"status"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	user, err := h.auth.UpdatePresenceStatus(userID, req.Status)
 	if err != nil {
 		log.Printf("Update presence error: %v", err)
-		h.writeError(w, err.Error(), http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -227,28 +228,28 @@ func (h *APIHandler) UpdatePresence(w http.ResponseWriter, r *http.Request) {
 func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	userID := h.extractUserID(r)
 	if userID == "" {
-		h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+		h.writeAPIError(w, r, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	if r.Method != http.MethodPost {
-		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeAPIError(w, r, "METHOD_NOT_ALLOWED", "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	req, err := decodeSendMessageRequest(r)
 	if err != nil {
-		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	if req.Content == "" {
-		h.writeError(w, "Content is required", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Content is required", http.StatusBadRequest)
 		return
 	}
 
 	if req.ReceiverID == "" && req.ChannelID == "" {
-		h.writeError(w, "Either receiver_id or channel_id must be provided", http.StatusBadRequest)
+		h.writeAPIError(w, r, "VALIDATION_ERROR", "Either receiver_id or channel_id must be provided", http.StatusBadRequest)
 		return
 	}
 
@@ -269,7 +270,7 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	msg, err := h.msgSvc.SendMessage(userID, req.ReceiverID, req.ChannelID, req.Content, req.ContentType)
 	if err != nil {
 		log.Printf("Send message error: %v", err)
-		h.writeError(w, "Failed to send message", http.StatusInternalServerError)
+		h.writeAPIError(w, r, "INTERNAL_ERROR", "Failed to send message", http.StatusInternalServerError)
 		return
 	}
 
@@ -287,32 +288,14 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) broadcastMessage(userID string, msg *types.Message, senderName string) {
-	wsMsg := messaging.WSOutgoingMessage{
-		Type:      "message",
-		Timestamp: msg.CreatedAt,
-		Payload: map[string]interface{}{
-			"sender_id":   msg.SenderID,
-			"sender_name": senderName,
-			"receiver_id": msg.ReceiverID,
-			"channel_id":  msg.ChannelID,
-			"content":     msg.Content,
-			"id":          msg.ID,
-		},
-	}
-
-	data, _ := json.Marshal(wsMsg)
-	if msg.ReceiverID != "" {
-		h.wsHub.SendToUser(msg.ReceiverID, data)
-	} else {
-		h.wsHub.BroadcastMessage(userID, data)
-	}
+	h.wsHub.EmitMessageNew(userID, msg, senderName)
 }
 
 // GetMessageHistory handles retrieving message history via REST API
 func (h *APIHandler) GetMessageHistory(w http.ResponseWriter, r *http.Request) {
 	userID := h.extractUserID(r)
 	if userID == "" {
-		h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+		h.writeAPIError(w, r, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
@@ -343,7 +326,7 @@ func (h *APIHandler) GetMessageHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Printf("Get messages error: %v", err)
-		h.writeError(w, "Failed to get messages", http.StatusInternalServerError)
+		h.writeAPIError(w, r, "INTERNAL_ERROR", "Failed to get messages", http.StatusInternalServerError)
 		return
 	}
 
@@ -371,12 +354,12 @@ func reverseMessages(messages []*types.Message) {
 func (h *APIHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 	userID := h.extractUserID(r)
 	if userID == "" {
-		h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+		h.writeAPIError(w, r, "UNAUTHORIZED", "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	if r.Method != http.MethodGet {
-		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeAPIError(w, r, "METHOD_NOT_ALLOWED", "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -393,7 +376,7 @@ func (h *APIHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.db.Query(query, userID, userID, userID)
 	if err != nil {
 		log.Printf("Get conversations error: %v", err)
-		h.writeError(w, "Failed to get conversations", http.StatusInternalServerError)
+		h.writeAPIError(w, r, "INTERNAL_ERROR", "Failed to get conversations", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -482,11 +465,9 @@ func (h *APIHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Send welcome message - client needs to identify first
 	welcomeMsg := messaging.WSOutgoingMessage{
-		Type:      "welcome",
-		Timestamp: time.Now().UTC(),
+		Op: "welcome",
 		Payload: map[string]interface{}{
-			"message": "Please send an 'identify' message with your token",
-			"op":      "identify",
+			"message": "Please send an identify message with your token",
 		},
 	}
 
@@ -518,15 +499,6 @@ func (h *APIHandler) extractUserID(r *http.Request) string {
 	}
 
 	return user.ID
-}
-
-func (h *APIHandler) writeError(w http.ResponseWriter, message string, statusCode int) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(types.ErrorResponse{
-		Error:   "error",
-		Message: message,
-	})
 }
 
 type sendMessageRequest struct {
