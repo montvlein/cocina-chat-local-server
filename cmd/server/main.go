@@ -31,7 +31,7 @@ func main() {
 	go wsHub.Run()
 
 	// Create API handlers
-	apiHandlers := handlers.NewAPIHandler(db.GetConn(), wsHub)
+	apiHandlers := handlers.NewAPIHandler(db.GetConn(), wsHub, cfg.ServerURL)
 
 	// Setup routes
 	mux := http.NewServeMux()
@@ -50,8 +50,14 @@ func main() {
 	mux.HandleFunc("/api/v1/messages/send", apiHandlers.SendMessage)
 	mux.HandleFunc("/api/v1/messages/history", apiHandlers.GetMessageHistory)
 	
-	// Conversations/DMs endpoints
+	// Conversations/DMs endpoints (legacy)
 	mux.HandleFunc("/api/v1/conversations", apiHandlers.GetConversations)
+
+	// Organization / workspace / channel API (v1 aligned)
+	mux.HandleFunc("/api/v1/orgs", apiHandlers.DispatchAPI)
+	mux.HandleFunc("/api/v1/orgs/", apiHandlers.DispatchAPI)
+	mux.HandleFunc("/api/v1/workspaces/", apiHandlers.DispatchAPI)
+	mux.HandleFunc("/api/v1/channels/", apiHandlers.DispatchAPI)
 
 	// WebSocket endpoint for real-time messaging
 	mux.HandleFunc("/ws", apiHandlers.HandleWebSocket)

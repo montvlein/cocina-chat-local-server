@@ -11,16 +11,18 @@ import (
 
 	"github.com/cocina/server-mvp/auth"
 	"github.com/cocina/server-mvp/messaging"
+	"github.com/cocina/server-mvp/org"
 	"github.com/cocina/server-mvp/types"
 	"github.com/gorilla/websocket"
 )
 
 // APIHandler handles HTTP request handlers
 type APIHandler struct {
-	db     *sql.DB
-	auth   *auth.AuthService
-	wsHub  *messaging.Hub
-	msgSvc *messaging.MessageService
+	db      *sql.DB
+	auth    *auth.AuthService
+	wsHub   *messaging.Hub
+	msgSvc  *messaging.MessageService
+	orgSvc  *org.Service
 }
 
 var upgrader = websocket.Upgrader{
@@ -32,10 +34,11 @@ var upgrader = websocket.Upgrader{
 }
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub) *APIHandler {
+func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub, serverURL string) *APIHandler {
 	tokenSvc := auth.NewTokenService("cocina-mvp-secret-key-change-in-production")
 	authSvc := auth.NewAuthService(db, tokenSvc)
 	msgSvc := messaging.NewMessageService(db)
+	orgSvc := org.NewService(db, serverURL)
 
 	wsHub.SetAuthService(authSvc)
 
@@ -44,6 +47,7 @@ func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub) *APIHandler {
 		auth:   authSvc,
 		wsHub:  wsHub,
 		msgSvc: msgSvc,
+		orgSvc: orgSvc,
 	}
 }
 
@@ -78,6 +82,10 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.orgSvc.EnsureDefaultOrgForUser(resp.User.ID); err != nil {
+		log.Printf("Default org assignment error: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(resp)
@@ -105,6 +113,10 @@ func (h *APIHandler) Login(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Login error: %v", err)
 		h.writeError(w, "Invalid credentials", http.StatusUnauthorized)
 		return
+	}
+
+	if err := h.orgSvc.EnsureDefaultOrgForUser(resp.User.ID); err != nil {
+		log.Printf("Default org assignment error: %v", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -267,7 +279,14 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		msg.SenderName = senderName
 	}
 
-	// Broadcast via WebSocket if receiver is connected
+	h.broadcastMessage(userID, msg, senderName)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(msg)
+}
+
+func (h *APIHandler) broadcastMessage(userID string, msg *types.Message, senderName string) {
 	wsMsg := messaging.WSOutgoingMessage{
 		Type:      "message",
 		Timestamp: msg.CreatedAt,
@@ -282,15 +301,11 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, _ := json.Marshal(wsMsg)
-	if messaging.IsDMChannel(msg.ChannelID) && msg.ReceiverID != "" {
+	if msg.ReceiverID != "" {
 		h.wsHub.SendToUser(msg.ReceiverID, data)
 	} else {
 		h.wsHub.BroadcastMessage(userID, data)
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(msg)
 }
 
 // GetMessageHistory handles retrieving message history via REST API
@@ -365,13 +380,17 @@ func (h *APIHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `SELECT channel_id, MAX(created_at) as last_message_at
-	          FROM messages
-	          WHERE channel_id LIKE 'dm::%' OR channel_id LIKE 'dm_%'
-	          GROUP BY channel_id
+	query := `SELECT c.id,
+	                 CASE WHEN dp.user_a = ? THEN dp.user_b ELSE dp.user_a END AS other_user_id,
+	                 COALESCE(MAX(m.created_at), c.created_at) AS last_message_at
+	          FROM channels c
+	          JOIN dm_participants dp ON dp.channel_id = c.id
+	          LEFT JOIN messages m ON m.channel_id = c.id
+	          WHERE c.type = 'dm' AND (dp.user_a = ? OR dp.user_b = ?)
+	          GROUP BY c.id
 	          ORDER BY last_message_at DESC`
 
-	rows, err := h.db.Query(query)
+	rows, err := h.db.Query(query, userID, userID, userID)
 	if err != nil {
 		log.Printf("Get conversations error: %v", err)
 		h.writeError(w, "Failed to get conversations", http.StatusInternalServerError)
@@ -387,19 +406,14 @@ func (h *APIHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
 
 	var conversations []conversation
 	for rows.Next() {
-		var channelID, lastMessageAt string
-		if err := rows.Scan(&channelID, &lastMessageAt); err != nil {
+		var conv conversation
+		if err := rows.Scan(&conv.ChannelID, &conv.OtherUserID, &conv.LastMessageAt); err != nil {
 			continue
 		}
-		otherUserID, ok := messaging.OtherUserInDMChannel(channelID, userID)
-		if !ok || otherUserID == "" {
+		if conv.OtherUserID == "" {
 			continue
 		}
-		conversations = append(conversations, conversation{
-			ChannelID:     channelID,
-			OtherUserID:   otherUserID,
-			LastMessageAt: lastMessageAt,
-		})
+		conversations = append(conversations, conv)
 	}
 
 	userIDs := make([]string, 0, len(conversations))
