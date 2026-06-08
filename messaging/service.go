@@ -38,6 +38,7 @@ func (s *MessageService) SendMessage(senderID, receiverID, channelID, content, c
 		ChannelID:   channelID,
 		Content:     content,
 		ContentType: contentType,
+		IsRead:      false,
 		CreatedAt:   now,
 	}
 
@@ -83,7 +84,7 @@ func (s *MessageService) GetMessageHistory(userID string, limit int, beforeID st
 
 // GetChannelMessages retrieves messages for a specific channel with sender info
 func (s *MessageService) GetChannelMessages(channelID string, limit int, beforeID string) ([]*types.Message, error) {
-	query := `SELECT m.id, m.sender_id, u.username, m.receiver_id, m.channel_id, m.content, m.content_type, m.created_at
+	query := `SELECT m.id, m.sender_id, u.username, m.receiver_id, m.channel_id, m.content, m.content_type, m.is_read, m.created_at
 	          FROM messages m
 	          JOIN users u ON u.id = m.sender_id
 	          WHERE m.channel_id = ?`
@@ -108,6 +109,7 @@ func (s *MessageService) GetChannelMessages(channelID string, limit int, beforeI
 	for rows.Next() {
 		var msg types.Message
 		var createdAtStr string
+		var isRead int
 		err := rows.Scan(
 			&msg.ID,
 			&msg.SenderID,
@@ -116,11 +118,14 @@ func (s *MessageService) GetChannelMessages(channelID string, limit int, beforeI
 			&msg.ChannelID,
 			&msg.Content,
 			&msg.ContentType,
+			&isRead,
 			&createdAtStr,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
+
+		msg.IsRead = isRead == 1
 
 		msg.CreatedAt, _ = time.Parse(time.RFC3339, createdAtStr)
 		messages = append(messages, &msg)

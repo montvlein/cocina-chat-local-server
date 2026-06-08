@@ -4,12 +4,13 @@ import "time"
 
 // User represents a registered user in the system
 type User struct {
-	ID          string    `json:"id"`
-	Email       string    `json:"email"`
-	Username    string    `json:"username"`
-	Password    string    `json:"-"` // Never expose password in JSON
-	DisplayName string    `json:"display_name,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID             string    `json:"id"`
+	Email          string    `json:"email"`
+	Username       string    `json:"username"`
+	Password       string    `json:"-"` // Never expose password in JSON
+	DisplayName    string    `json:"display_name,omitempty"`
+	PresenceStatus string    `json:"presence_status"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // Message represents a chat message between users
@@ -21,6 +22,7 @@ type Message struct {
 	ChannelID   string    `json:"channel_id,omitempty"`
 	Content     string    `json:"content"`
 	ContentType string    `json:"content_type"` // "text", "rich"
+	IsRead      bool      `json:"is_read"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

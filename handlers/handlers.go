@@ -37,6 +37,8 @@ func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub) *APIHandler {
 	authSvc := auth.NewAuthService(db, tokenSvc)
 	msgSvc := messaging.NewMessageService(db)
 
+	wsHub.SetAuthService(authSvc)
+
 	return &APIHandler{
 		db:     db,
 		auth:   authSvc,
@@ -175,6 +177,40 @@ func (h *APIHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(user)
 }
 
+// UpdatePresence updates the authenticated user's presence status
+func (h *APIHandler) UpdatePresence(w http.ResponseWriter, r *http.Request) {
+	userID := h.extractUserID(r)
+	if userID == "" {
+		h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != http.MethodPatch && r.Method != http.MethodPut {
+		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	user, err := h.auth.UpdatePresenceStatus(userID, req.Status)
+	if err != nil {
+		log.Printf("Update presence error: %v", err)
+		h.writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.wsHub.BroadcastPresence(userID, user.PresenceStatus)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(user)
+}
+
 // SendMessage handles sending a message via REST API
 func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	userID := h.extractUserID(r)
@@ -208,6 +244,16 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		req.ContentType = "text"
 	}
 
+	if messaging.IsDMChannel(req.ChannelID) {
+		if req.ReceiverID == "" {
+			if other, ok := messaging.OtherUserInDMChannel(req.ChannelID, userID); ok {
+				req.ReceiverID = other
+			}
+		}
+	} else if req.ChannelID == "" && req.ReceiverID != "" {
+		req.ChannelID = messaging.BuildDMChannelID(userID, req.ReceiverID)
+	}
+
 	msg, err := h.msgSvc.SendMessage(userID, req.ReceiverID, req.ChannelID, req.Content, req.ContentType)
 	if err != nil {
 		log.Printf("Send message error: %v", err)
@@ -236,7 +282,11 @@ func (h *APIHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, _ := json.Marshal(wsMsg)
-	h.wsHub.BroadcastMessage(userID, data)
+	if messaging.IsDMChannel(msg.ChannelID) && msg.ReceiverID != "" {
+		h.wsHub.SendToUser(msg.ReceiverID, data)
+	} else {
+		h.wsHub.BroadcastMessage(userID, data)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -300,6 +350,106 @@ func reverseMessages(messages []*types.Message) {
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
+}
+
+// GetConversations returns all DM conversations for the authenticated user
+func (h *APIHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
+	userID := h.extractUserID(r)
+	if userID == "" {
+		h.writeError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != http.MethodGet {
+		h.writeError(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := `SELECT channel_id, MAX(created_at) as last_message_at
+	          FROM messages
+	          WHERE channel_id LIKE 'dm::%' OR channel_id LIKE 'dm_%'
+	          GROUP BY channel_id
+	          ORDER BY last_message_at DESC`
+
+	rows, err := h.db.Query(query)
+	if err != nil {
+		log.Printf("Get conversations error: %v", err)
+		h.writeError(w, "Failed to get conversations", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type conversation struct {
+		ChannelID     string
+		OtherUserID   string
+		LastMessageAt string
+	}
+
+	var conversations []conversation
+	for rows.Next() {
+		var channelID, lastMessageAt string
+		if err := rows.Scan(&channelID, &lastMessageAt); err != nil {
+			continue
+		}
+		otherUserID, ok := messaging.OtherUserInDMChannel(channelID, userID)
+		if !ok || otherUserID == "" {
+			continue
+		}
+		conversations = append(conversations, conversation{
+			ChannelID:     channelID,
+			OtherUserID:   otherUserID,
+			LastMessageAt: lastMessageAt,
+		})
+	}
+
+	userIDs := make([]string, 0, len(conversations))
+	for _, conv := range conversations {
+		userIDs = append(userIDs, conv.OtherUserID)
+	}
+
+	userMap := make(map[string]string) // userID -> username
+	if len(userIDs) > 0 {
+		placeholders := make([]string, len(userIDs))
+		args := make([]interface{}, len(userIDs))
+		for i, id := range userIDs {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+		
+		query := fmt.Sprintf("SELECT id, username FROM users WHERE id IN (%s)", strings.Join(placeholders, ","))
+		rows2, err2 := h.db.Query(query, args...)
+		if err2 == nil {
+			defer rows2.Close()
+			for rows2.Next() {
+				var id, username string
+				rows2.Scan(&id, &username)
+				userMap[id] = username
+			}
+		}
+	}
+
+	// Build response with channel IDs
+	type conversationResponse struct {
+		ChannelID   string `json:"channel_id"`
+		OtherUserID string `json:"other_user_id"`
+		Username    string `json:"username"`
+		LastMessageAt string `json:"last_message_at"`
+	}
+
+	var responses []conversationResponse
+	for _, conv := range conversations {
+		responses = append(responses, conversationResponse{
+			ChannelID:     conv.ChannelID,
+			OtherUserID:   conv.OtherUserID,
+			Username:      userMap[conv.OtherUserID],
+			LastMessageAt: conv.LastMessageAt,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"conversations": responses,
+	})
 }
 
 // HandleWebSocket handles WebSocket connections

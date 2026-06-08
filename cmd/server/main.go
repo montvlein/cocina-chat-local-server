@@ -44,10 +44,14 @@ func main() {
 
 	// User endpoints
 	mux.HandleFunc("/api/v1/users/me", apiHandlers.GetMe)
+	mux.HandleFunc("/api/v1/users/me/presence", apiHandlers.UpdatePresence)
 
 	// Message endpoints (REST API)
 	mux.HandleFunc("/api/v1/messages/send", apiHandlers.SendMessage)
 	mux.HandleFunc("/api/v1/messages/history", apiHandlers.GetMessageHistory)
+	
+	// Conversations/DMs endpoints
+	mux.HandleFunc("/api/v1/conversations", apiHandlers.GetConversations)
 
 	// WebSocket endpoint for real-time messaging
 	mux.HandleFunc("/ws", apiHandlers.HandleWebSocket)
@@ -119,12 +123,12 @@ func corsMiddleware(next http.Handler) http.Handler {
 			
 			// If this looks like a WebSocket upgrade attempt (even in preflight)
 			if connection == "Upgrade" || upgrade == "websocket" {
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Upgrade, Connection")
 				// Don't return 204 - let the request continue to the handler
 			} else {
 				// Regular preflight request - respond with no content
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
 				w.WriteHeader(http.StatusNoContent)
 				return

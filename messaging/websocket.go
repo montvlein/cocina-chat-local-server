@@ -21,11 +21,13 @@ type Client struct {
 // Hub manages all active WebSocket connections
 type Hub struct {
 	clients    map[string]*Client // userID -> client (one per user for MVP)
+	presence   map[string]string  // userID -> presence status cache
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan broadcastMessage
 	mu         sync.RWMutex
 	tokenSvc   *auth.TokenService
+	authSvc    *auth.AuthService
 }
 
 type broadcastMessage struct {
@@ -37,11 +39,17 @@ type broadcastMessage struct {
 func NewWebSocketHub() *Hub {
 	return &Hub{
 		clients:    make(map[string]*Client),
+		presence:   make(map[string]string),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan broadcastMessage, 256),
 		tokenSvc:   auth.NewTokenService("cocina-mvp-secret-key-change-in-production"),
 	}
+}
+
+// SetAuthService allows the hub to load and persist user presence.
+func (h *Hub) SetAuthService(authSvc *auth.AuthService) {
+	h.authSvc = authSvc
 }
 
 // Run starts the hub event loop
@@ -53,6 +61,8 @@ func (h *Hub) Run() {
 			h.clients[client.UserID] = client
 			h.mu.Unlock()
 			log.Printf("Client registered: %s", client.UserID)
+			h.broadcastPresence(client.UserID, h.getPresenceForUser(client.UserID))
+			h.sendPresenceSync(client)
 
 		case client := <-h.unregister:
 			h.mu.Lock()
@@ -62,6 +72,9 @@ func (h *Hub) Run() {
 			}
 			h.mu.Unlock()
 			log.Printf("Client unregistered: %s", client.UserID)
+			if client.UserID != "" {
+				h.broadcastPresence(client.UserID, "offline")
+			}
 
 		case msg := <-h.broadcast:
 			h.mu.RLock()
@@ -209,6 +222,8 @@ func (h *Hub) handleClientMessage(client *Client, msg WSIncomingMessage) {
 		h.handleTextMessage(client.UserID, msg.Payload)
 	case "typing":
 		h.handleTypingIndicator(client.UserID, msg.Payload)
+	case "presence":
+		h.handlePresenceUpdate(client.UserID, msg.Payload)
 	case "ping":
 		h.sendPong(client.UserID)
 	default:
@@ -234,6 +249,7 @@ func (h *Hub) handleIdentify(client *Client, payload map[string]interface{}) {
 
 	client.UserID = user.ID
 	h.register <- client
+
 	// Send welcome message with user ID
 	welcomeMsg := WSOutgoingMessage{
 		Type:      "connected",
@@ -300,6 +316,103 @@ func (h *Hub) sendPong(senderID string) {
 
 	data, _ := json.Marshal(wsMsg)
 	h.SendToUser(senderID, data)
+}
+
+func (h *Hub) getPresenceForUser(userID string) string {
+	if h.authSvc != nil {
+		if user, err := h.authSvc.GetUserByID(userID); err == nil && user.PresenceStatus != "" {
+			h.mu.Lock()
+			h.presence[userID] = user.PresenceStatus
+			h.mu.Unlock()
+			return user.PresenceStatus
+		}
+	}
+
+	h.mu.RLock()
+	status, ok := h.presence[userID]
+	h.mu.RUnlock()
+	if ok && status != "" {
+		return status
+	}
+	return "available"
+}
+
+func (h *Hub) handlePresenceUpdate(userID string, payload map[string]interface{}) {
+	status, _ := payload["status"].(string)
+	if status == "" {
+		return
+	}
+
+	switch status {
+	case "available", "offline", "dnd":
+	default:
+		return
+	}
+
+	if h.authSvc != nil {
+		if _, err := h.authSvc.UpdatePresenceStatus(userID, status); err != nil {
+			log.Printf("Failed to update presence for %s: %v", userID, err)
+			return
+		}
+	}
+
+	h.mu.Lock()
+	h.presence[userID] = status
+	h.mu.Unlock()
+
+	h.broadcastPresence(userID, status)
+}
+
+func (h *Hub) broadcastPresence(userID, status string) {
+	wsMsg := WSOutgoingMessage{
+		Type:      "presence",
+		Timestamp: time.Now().UTC(),
+		Payload: map[string]interface{}{
+			"user_id": userID,
+			"status":  status,
+		},
+	}
+
+	data, _ := json.Marshal(wsMsg)
+	h.BroadcastMessage("", data)
+}
+
+func (h *Hub) sendPresenceSync(client *Client) {
+	h.mu.RLock()
+	userIDs := make([]string, 0, len(h.clients))
+	for id := range h.clients {
+		userIDs = append(userIDs, id)
+	}
+	h.mu.RUnlock()
+
+	users := make([]map[string]string, 0, len(userIDs))
+	for _, id := range userIDs {
+		users = append(users, map[string]string{
+			"user_id": id,
+			"status":  h.getPresenceForUser(id),
+		})
+	}
+
+	wsMsg := WSOutgoingMessage{
+		Type:      "presence_sync",
+		Timestamp: time.Now().UTC(),
+		Payload: map[string]interface{}{
+			"users": users,
+		},
+	}
+
+	data, _ := json.Marshal(wsMsg)
+	client.Mu.Lock()
+	client.Conn.WriteMessage(websocket.TextMessage, data)
+	client.Mu.Unlock()
+}
+
+// BroadcastPresence notifies all clients about a presence change.
+func (h *Hub) BroadcastPresence(userID, status string) {
+	h.mu.Lock()
+	h.presence[userID] = status
+	h.mu.Unlock()
+	h.broadcastPresence(userID, status)
 }
 
 // WSOutgoingMessage represents a message sent to clients

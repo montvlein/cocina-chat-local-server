@@ -74,10 +74,11 @@ func (s *AuthService) Register(email, username, password string) (*types.AuthRes
 	}
 
 	user := &types.User{
-		ID:        userID,
-		Email:     email,
-		Username:  username,
-		CreatedAt: time.Now(),
+		ID:             userID,
+		Email:          email,
+		Username:       username,
+		PresenceStatus: "available",
+		CreatedAt:      time.Now(),
 	}
 
 	return &types.AuthResponse{
@@ -144,21 +145,45 @@ func (s *AuthService) Logout(refreshToken string) error {
 
 // GetUserByID retrieves a user by their ID
 func (s *AuthService) GetUserByID(id string) (*types.User, error) {
-	var email, username string
+	var email, username, presenceStatus string
 	var createdAt time.Time
 	err := s.db.QueryRow(
-		"SELECT id, email, username, created_at FROM users WHERE id = ?", id,
-	).Scan(&id, &email, &username, &createdAt)
+		"SELECT id, email, username, COALESCE(presence_status, 'available'), created_at FROM users WHERE id = ?", id,
+	).Scan(&id, &email, &username, &presenceStatus, &createdAt)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
+	if presenceStatus == "" {
+		presenceStatus = "available"
+	}
+
 	return &types.User{
-		ID:        id,
-		Email:     email,
-		Username:  username,
-		CreatedAt: createdAt,
+		ID:             id,
+		Email:          email,
+		Username:       username,
+		PresenceStatus: presenceStatus,
+		CreatedAt:      createdAt,
 	}, nil
+}
+
+// UpdatePresenceStatus updates a user's presence status
+func (s *AuthService) UpdatePresenceStatus(userID, status string) (*types.User, error) {
+	switch status {
+	case "available", "offline", "dnd":
+	default:
+		return nil, fmt.Errorf("invalid presence status")
+	}
+
+	_, err := s.db.Exec(
+		"UPDATE users SET presence_status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		status, userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update presence: %w", err)
+	}
+
+	return s.GetUserByID(userID)
 }
 
 // Helper functions for password hashing

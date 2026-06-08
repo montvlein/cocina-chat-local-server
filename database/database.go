@@ -53,6 +53,7 @@ func (d *Database) initSchema() error {
 		username TEXT UNIQUE NOT NULL,
 		password_hash TEXT NOT NULL,
 		display_name TEXT,
+		presence_status TEXT DEFAULT 'available',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
@@ -86,7 +87,14 @@ func (d *Database) initSchema() error {
 	`
 
 	_, err := d.conn.Exec(schema)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migrate existing databases
+	_, _ = d.conn.Exec(`ALTER TABLE users ADD COLUMN presence_status TEXT DEFAULT 'available'`)
+
+	return nil
 }
 
 // GetConn returns the underlying database connection
