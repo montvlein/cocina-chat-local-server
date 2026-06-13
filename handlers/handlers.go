@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cocina/server-mvp/auth"
+	"github.com/cocina/server-mvp/config"
 	"github.com/cocina/server-mvp/messaging"
 	"github.com/cocina/server-mvp/org"
 	"github.com/cocina/server-mvp/types"
@@ -18,6 +19,7 @@ import (
 // APIHandler handles HTTP request handlers
 type APIHandler struct {
 	db      *sql.DB
+	cfg     *config.Config
 	auth    *auth.AuthService
 	wsHub   *messaging.Hub
 	msgSvc  *messaging.MessageService
@@ -33,18 +35,19 @@ var upgrader = websocket.Upgrader{
 }
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub, serverURL string) *APIHandler {
-	tokenSvc := auth.NewTokenService("cocina-mvp-secret-key-change-in-production")
-	authSvc := auth.NewAuthService(db, tokenSvc)
+func NewAPIHandler(db *sql.DB, wsHub *messaging.Hub, cfg *config.Config) *APIHandler {
+	authSvc := auth.NewAuthService(db, cfg)
 	msgSvc := messaging.NewMessageService(db)
-	orgSvc := org.NewService(db, serverURL)
+	orgSvc := org.NewService(db, cfg.ServerURL, cfg.IdentityURL, cfg.IdentityAPIKey)
 
+	authSvc.SetOrgProvisioner(orgSvc)
 	wsHub.SetAuthService(authSvc)
 	wsHub.SetOrgService(orgSvc)
 	wsHub.SetMessageService(msgSvc)
 
 	return &APIHandler{
 		db:     db,
+		cfg:    cfg,
 		auth:   authSvc,
 		wsHub:  wsHub,
 		msgSvc: msgSvc,
@@ -141,7 +144,7 @@ func (h *APIHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For MVP, we generate a new refresh token
-	newRefreshToken, _ := auth.NewTokenService("cocina-mvp-secret-key-change-in-production").GenerateRefreshToken()
+	newRefreshToken, _ := auth.NewTokenService(h.cfg.JWTSecret).GenerateRefreshToken()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -491,9 +494,7 @@ func (h *APIHandler) extractUserID(r *http.Request) string {
 		return ""
 	}
 
-	token := parts[1]
-	tokenSvc := auth.NewTokenService("cocina-mvp-secret-key-change-in-production")
-	user, err := tokenSvc.ValidateAccessToken(token)
+	user, err := h.auth.ValidateAccessToken(parts[1])
 	if err != nil {
 		return ""
 	}

@@ -89,6 +89,7 @@ func (d *Database) initSchema() error {
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
 		slug TEXT UNIQUE NOT NULL,
+		server_url TEXT,
 		deployment_mode TEXT DEFAULT 'saas',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
@@ -163,6 +164,16 @@ func (d *Database) initSchema() error {
 
 	// Migrate existing databases
 	_, _ = d.conn.Exec(`ALTER TABLE users ADD COLUMN presence_status TEXT DEFAULT 'available'`)
+	_, _ = d.conn.Exec(`ALTER TABLE organizations ADD COLUMN server_url TEXT`)
+	_, _ = d.conn.Exec(`ALTER TABLE users ADD COLUMN global_identity_id TEXT`)
+	_, _ = d.conn.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_users_global_identity
+		ON users(global_identity_id) WHERE global_identity_id IS NOT NULL AND global_identity_id != ''`)
+	_, _ = d.conn.Exec(`
+		CREATE TABLE IF NOT EXISTS server_settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		)`)
 
 	if err := d.seedDefaultOrg(); err != nil {
 		return err
@@ -175,7 +186,20 @@ func (d *Database) initSchema() error {
 		log.Printf("Warning: user UUID migration failed: %v", err)
 	}
 
+	d.backfillOrgServerURLs()
+
 	return nil
+}
+
+func (d *Database) backfillOrgServerURLs() {
+	url := os.Getenv("COCINA_SERVER_URL")
+	if url == "" {
+		url = "http://localhost:8090/api/v1"
+	}
+	_, _ = d.conn.Exec(
+		`UPDATE organizations SET server_url = ? WHERE server_url IS NULL OR server_url = ''`,
+		url,
+	)
 }
 
 func (d *Database) seedDefaultOrg() error {

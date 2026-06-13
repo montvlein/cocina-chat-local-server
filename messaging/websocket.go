@@ -47,7 +47,6 @@ type Hub struct {
 	unregister chan *Client
 	broadcast  chan broadcastMessage
 	mu         sync.RWMutex
-	tokenSvc   *auth.TokenService
 	authSvc    *auth.AuthService
 	orgSvc     *org.Service
 	msgSvc     *MessageService
@@ -67,7 +66,6 @@ func NewWebSocketHub() *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan broadcastMessage, 256),
-		tokenSvc:   auth.NewTokenService("cocina-mvp-secret-key-change-in-production"),
 	}
 }
 
@@ -348,7 +346,12 @@ func (h *Hub) handleIdentify(client *Client, payload map[string]interface{}) {
 		return
 	}
 
-	user, err := h.tokenSvc.ValidateAccessToken(token)
+	if h.authSvc == nil {
+		log.Println("Identify failed: auth service not configured")
+		return
+	}
+
+	user, err := h.authSvc.ValidateAccessToken(token)
 	if err != nil {
 		log.Printf("Invalid token during identify: %v", err)
 		return

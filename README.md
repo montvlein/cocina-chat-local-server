@@ -78,7 +78,33 @@ The server will start on `http://localhost:8090`
 |----------|---------|-------------|
 | COCINA_PORT | 8090 | HTTP server port |
 | COCINA_DB_PATH | ./data/cocina.db | SQLite database path |
-| COCINA_JWT_SECRET | cocina-mvp-secret-key-change-in-production | JWT signing secret |
+| COCINA_SERVER_URL | `http://localhost:{PORT}/api/v1` | Public API URL (used when registering with Identity) |
+| COCINA_JWT_SECRET | cocina-mvp-secret-key-change-in-production | Local auth token secret (legacy/dual mode) |
+| COCINA_IDENTITY_URL | — | Base URL of cocina-identity (e.g. `http://localhost:8080`) |
+| COCINA_IDENTITY_ISSUER | same as `COCINA_IDENTITY_URL` | Expected JWT `iss` claim |
+| COCINA_IDENTITY_JWKS_URL | `{IDENTITY_URL}/.well-known/jwks.json` | JWKS endpoint override |
+| COCINA_IDENTITY_API_KEY | — | API key from Identity panel (`ck_...`) to link this server to an org |
+| COCINA_AUTH_MODE | `dual` | `local`, `identity`, or `dual` (accept both token types) |
+
+### Identity integration
+
+When `COCINA_IDENTITY_URL` is set:
+
+1. On startup, if `COCINA_IDENTITY_API_KEY` is configured, the server calls `POST /api/v1/server/register` on Identity and syncs the linked org locally (workspace + `#general` channel).
+2. Requests with a Bearer JWT from Identity are validated via JWKS (RS256).
+3. On first access, users are **lazy-provisioned** locally with `global_identity_id = JWT.sub` and added to the linked org.
+4. Local register/login still works in `dual` mode for development.
+
+Example `.env` for Docker alongside Identity:
+
+```bash
+COCINA_IDENTITY_URL=http://host.docker.internal:8080
+COCINA_IDENTITY_ISSUER=http://localhost:8080
+COCINA_IDENTITY_API_KEY=ck_your_key_from_identity_panel
+COCINA_AUTH_MODE=dual
+```
+
+**Note:** `COCINA_IDENTITY_ISSUER` must match the issuer embedded in JWT tokens (check Identity's `COCINA_IDENTITY_ISSUER` env).
 
 ### Docker Deployment
 

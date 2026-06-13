@@ -12,7 +12,9 @@ import (
 	"github.com/cocina/server-mvp/config"
 	"github.com/cocina/server-mvp/database"
 	"github.com/cocina/server-mvp/handlers"
+	"github.com/cocina/server-mvp/identityclient"
 	"github.com/cocina/server-mvp/messaging"
+	"github.com/cocina/server-mvp/org"
 )
 
 func main() {
@@ -30,8 +32,22 @@ func main() {
 	wsHub := messaging.NewWebSocketHub()
 	go wsHub.Run()
 
+	orgSvc := org.NewService(db.GetConn(), cfg.ServerURL, cfg.IdentityURL, cfg.IdentityAPIKey)
+	if cfg.IdentityURL != "" && cfg.IdentityAPIKey != "" {
+		idClient := identityclient.New(cfg.IdentityURL, cfg.ServerURL, cfg.IdentityAPIKey)
+		if linkedOrg, err := idClient.RegisterServer(); err != nil {
+			log.Printf("Warning: identity server registration failed: %v", err)
+		} else if err := orgSvc.EnsureIdentityOrg(linkedOrg); err != nil {
+			log.Printf("Warning: failed to sync identity org locally: %v", err)
+		} else {
+			log.Printf("Linked to identity org: %s (%s)", linkedOrg.Name, linkedOrg.ID)
+		}
+	} else if cfg.IdentityEnabled() {
+		log.Printf("Identity auth enabled (mode=%s); set COCINA_IDENTITY_API_KEY to link this server to an org", cfg.AuthMode)
+	}
+
 	// Create API handlers
-	apiHandlers := handlers.NewAPIHandler(db.GetConn(), wsHub, cfg.ServerURL)
+	apiHandlers := handlers.NewAPIHandler(db.GetConn(), wsHub, cfg)
 
 	// Setup routes
 	mux := http.NewServeMux()
@@ -100,6 +116,9 @@ func main() {
 
 	log.Printf("Cocina Server MVP starting on http://localhost%s", addr)
 	log.Printf("Database path: %s", cfg.DBPath)
+	if cfg.IdentityEnabled() {
+		log.Printf("Identity auth: %s (issuer=%s)", cfg.IdentityURL, cfg.IdentityIssuer)
+	}
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Server error: %v", err)

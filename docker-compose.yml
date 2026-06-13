@@ -8,10 +8,19 @@ services:
     volumes:
       # Mount SQLite database directory for persistence
       - ./data:/app/data
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - COCINA_PORT=8090
       - COCINA_DB_PATH=/app/data/cocina.db
+      - COCINA_SERVER_URL=http://localhost:8090/api/v1
       - COCINA_JWT_SECRET=${COCINA_JWT_SECRET:-cocina-mvp-secret-key-change-in-production}
+      - COCINA_IDENTITY_URL=${COCINA_IDENTITY_URL:-http://host.docker.internal:8080}
+      - COCINA_IDENTITY_ISSUER=${COCINA_IDENTITY_ISSUER:-http://localhost:8080}
+      - COCINA_IDENTITY_API_KEY=${COCINA_IDENTITY_API_KEY:-}
+      - COCINA_AUTH_MODE=${COCINA_AUTH_MODE:-dual}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/health"]

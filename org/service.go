@@ -6,22 +6,30 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cocina/server-mvp/identityclient"
 	"github.com/cocina/server-mvp/types"
 )
 
 // Service handles organization, workspace, and channel operations.
 type Service struct {
-	db        *sql.DB
-	serverURL string
+	db             *sql.DB
+	serverURL      string
+	identityURL    string
+	identityAPIKey string
 }
 
-func NewService(db *sql.DB, serverURL string) *Service {
-	return &Service{db: db, serverURL: serverURL}
+func NewService(db *sql.DB, serverURL, identityURL, identityAPIKey string) *Service {
+	return &Service{
+		db:             db,
+		serverURL:      strings.TrimRight(serverURL, "/"),
+		identityURL:    strings.TrimRight(identityURL, "/"),
+		identityAPIKey: identityAPIKey,
+	}
 }
 
 func (s *Service) ListOrgsForUser(userID string) ([]types.OrgMembership, error) {
 	rows, err := s.db.Query(`
-		SELECT o.id, o.name, o.slug, o.deployment_mode, o.created_at, m.role, m.joined_at
+		SELECT o.id, o.name, o.slug, o.deployment_mode, COALESCE(o.server_url, ''), o.created_at, m.role, m.joined_at
 		FROM organizations o
 		JOIN org_members m ON m.org_id = o.id
 		WHERE m.user_id = ?
@@ -35,13 +43,17 @@ func (s *Service) ListOrgsForUser(userID string) ([]types.OrgMembership, error) 
 	for rows.Next() {
 		var item types.OrgMembership
 		var createdAt, joinedAt string
+		var serverURL string
 		if err := rows.Scan(
 			&item.Org.ID, &item.Org.Name, &item.Org.Slug, &item.Org.DeploymentMode,
-			&createdAt, &item.Role, &joinedAt,
+			&serverURL, &createdAt, &item.Role, &joinedAt,
 		); err != nil {
 			return nil, err
 		}
-		item.Org.ServerURL = s.serverURL
+		if serverURL == "" {
+			serverURL = s.serverURL
+		}
+		item.Org.ServerURL = serverURL
 		item.Org.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 		item.JoinedAt, _ = time.Parse(time.RFC3339, joinedAt)
 		result = append(result, item)
@@ -273,6 +285,10 @@ func (s *Service) getChannelByID(channelID, currentUserID string) (*types.Channe
 }
 
 func (s *Service) EnsureDefaultOrgForUser(userID string) error {
+	if linkedOrgID, _ := s.getLinkedIdentityOrgID(); linkedOrgID != "" {
+		return s.EnsureLinkedOrgMember(userID)
+	}
+
 	var count int
 	if err := s.db.QueryRow(
 		`SELECT COUNT(*) FROM org_members WHERE user_id = ?`, userID,
@@ -283,6 +299,152 @@ func (s *Service) EnsureDefaultOrgForUser(userID string) error {
 		return nil
 	}
 	return s.addUserToOrg(userID, DefaultOrgID, types.RoleMember)
+}
+
+const (
+	settingIdentityOrgID = "identity_org_id"
+)
+
+func (s *Service) getLinkedIdentityOrgID() (string, error) {
+	var value string
+	err := s.db.QueryRow(
+		`SELECT value FROM server_settings WHERE key = ?`, settingIdentityOrgID,
+	).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+// EnsureIdentityOrg upserts the organization linked to cocina-identity.
+func (s *Service) EnsureIdentityOrg(org *types.Organization) error {
+	if org == nil || org.ID == "" {
+		return fmt.Errorf("invalid identity org")
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	serverURL := org.ServerURL
+	if serverURL == "" {
+		serverURL = s.serverURL
+	}
+	deploymentMode := org.DeploymentMode
+	if deploymentMode == "" {
+		deploymentMode = types.DeploymentLocal
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO organizations (id, name, slug, server_url, deployment_mode, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+			name = excluded.name,
+			slug = excluded.slug,
+			server_url = excluded.server_url,
+			deployment_mode = excluded.deployment_mode`,
+		org.ID, org.Name, org.Slug, serverURL, deploymentMode, now,
+	)
+	if err != nil {
+		return err
+	}
+
+	wsID := "ws_" + org.ID
+	chID := "ch_" + org.ID + "_general"
+
+	_, err = s.db.Exec(`
+		INSERT OR IGNORE INTO workspaces (id, org_id, name, slug, description, is_default, created_at)
+		VALUES (?, ?, 'General', 'general', 'Workspace principal', 1, ?)`,
+		wsID, org.ID, now,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`
+		INSERT OR IGNORE INTO channels (id, workspace_id, name, type, description, created_at)
+		VALUES (?, ?, 'general', 'public', 'Canal principal de la organización', ?)`,
+		chID, wsID, now,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.db.Exec(`
+		INSERT INTO server_settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		settingIdentityOrgID, org.ID,
+	)
+	return err
+}
+
+// EnsureLinkedOrgMember adds the user to the identity-linked org when configured.
+func (s *Service) EnsureLinkedOrgMember(userID string) error {
+	orgID, err := s.getLinkedIdentityOrgID()
+	if err != nil || orgID == "" {
+		return err
+	}
+	return s.addUserToOrg(userID, orgID, types.RoleMember)
+}
+
+// TryLinkIdentityOrg registers this server with Identity if not linked yet.
+func (s *Service) TryLinkIdentityOrg() error {
+	if s.identityURL == "" || s.identityAPIKey == "" {
+		return nil
+	}
+	if linked, _ := s.getLinkedIdentityOrgID(); linked != "" {
+		return nil
+	}
+	client := identityclient.New(s.identityURL, s.serverURL, s.identityAPIKey)
+	org, err := client.RegisterServer()
+	if err != nil {
+		return err
+	}
+	return s.EnsureIdentityOrg(org)
+}
+
+// SyncIdentityMemberships syncs org memberships from Identity for the authenticated user.
+func (s *Service) SyncIdentityMemberships(localUserID, bearerToken string) error {
+	if s.identityURL == "" {
+		return s.EnsureDefaultOrgForUser(localUserID)
+	}
+
+	_ = s.TryLinkIdentityOrg()
+
+	client := identityclient.New(s.identityURL, s.serverURL, s.identityAPIKey)
+	memberships, err := client.GetUserOrgs(bearerToken)
+	if err != nil {
+		return s.EnsureLinkedOrgMember(localUserID)
+	}
+
+	thisServer := identityclient.NormalizeServerURL(s.serverURL)
+	matched := 0
+	for _, m := range memberships {
+		orgURL := m.Org.ServerURL
+		if orgURL == "" {
+			orgURL = s.serverURL
+		}
+		if identityclient.NormalizeServerURL(orgURL) != thisServer {
+			continue
+		}
+		org := m.Org
+		if org.ServerURL == "" {
+			org.ServerURL = s.serverURL
+		}
+		if err := s.EnsureIdentityOrg(&org); err != nil {
+			return err
+		}
+		role := m.Role
+		if role == "" {
+			role = types.RoleMember
+		}
+		if err := s.addUserToOrg(localUserID, org.ID, role); err != nil {
+			return err
+		}
+		matched++
+	}
+
+	if matched == 0 {
+		return nil
+	}
+	return nil
 }
 
 func (s *Service) addUserToOrg(userID, orgID, role string) error {
