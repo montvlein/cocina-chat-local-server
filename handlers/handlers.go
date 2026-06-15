@@ -67,6 +67,7 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Username    string `json:"username"`
 		Password    string `json:"password"`
 		DisplayName string `json:"display_name,omitempty"`
+		InviteToken string `json:"invite_token,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -88,6 +89,12 @@ func (h *APIHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.orgSvc.EnsureDefaultOrgForUser(resp.User.ID); err != nil {
 		log.Printf("Default org assignment error: %v", err)
+	}
+
+	if req.InviteToken != "" {
+		if err := h.orgSvc.AcceptInvitation(req.InviteToken, resp.User.ID); err != nil {
+			log.Printf("Invite acceptance error: %v", err)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -16,6 +16,7 @@ import (
 	"github.com/cocina/server-mvp/identityclient"
 	"github.com/cocina/server-mvp/messaging"
 	"github.com/cocina/server-mvp/org"
+	"github.com/cocina/server-mvp/version"
 )
 
 func main() {
@@ -79,11 +80,14 @@ func main() {
 	// WebSocket endpoint for real-time messaging
 	mux.HandleFunc("/ws", apiHandlers.HandleWebSocket)
 
-	// Admin: network / internet exposure
+	// Admin panel API
 	mux.HandleFunc("/admin", admin.ServePage)
 	mux.HandleFunc("/admin/", admin.ServePage)
-	mux.HandleFunc("/api/v1/admin/network", apiHandlers.DispatchAdmin)
-	mux.HandleFunc("/api/v1/admin/network/", apiHandlers.DispatchAdmin)
+	mux.HandleFunc("/api/v1/admin/", apiHandlers.DispatchAdmin)
+	mux.HandleFunc("/api/v1/admin", apiHandlers.DispatchAdmin)
+
+	// Invitations (public preview + authenticated accept)
+	mux.HandleFunc("/api/v1/invitations/", apiHandlers.DispatchInvitation)
 
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -121,8 +125,8 @@ func main() {
 		}
 	}()
 
-	log.Printf("Cocina Server MVP starting on http://localhost%s", addr)
-	log.Printf("Admin network setup: http://localhost%s/admin", addr)
+	log.Printf("Cocina Server %s starting on http://localhost%s", version.Version, addr)
+	log.Printf("Admin panel: http://localhost%s/admin", addr)
 	log.Printf("Database path: %s", cfg.DBPath)
 	if cfg.IdentityEnabled() {
 		log.Printf("Identity auth: %s (issuer=%s)", cfg.IdentityURL, cfg.IdentityIssuer)

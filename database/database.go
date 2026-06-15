@@ -175,6 +175,22 @@ func (d *Database) initSchema() error {
 			value TEXT NOT NULL
 		)`)
 
+	_, _ = d.conn.Exec(`
+		CREATE TABLE IF NOT EXISTS org_invitations (
+			id TEXT PRIMARY KEY,
+			org_id TEXT NOT NULL REFERENCES organizations(id),
+			token_hash TEXT NOT NULL UNIQUE,
+			token_prefix TEXT NOT NULL,
+			role TEXT NOT NULL DEFAULT 'member',
+			created_by TEXT REFERENCES users(id),
+			expires_at DATETIME,
+			max_uses INTEGER DEFAULT 0,
+			use_count INTEGER DEFAULT 0,
+			revoked INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`)
+	_, _ = d.conn.Exec(`CREATE INDEX IF NOT EXISTS idx_org_invitations_org ON org_invitations(org_id)`)
+
 	if err := d.seedDefaultOrg(); err != nil {
 		return err
 	}

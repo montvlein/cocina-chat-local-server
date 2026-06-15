@@ -10,6 +10,7 @@ import (
 	"github.com/cocina/server-mvp/ids"
 	"github.com/cocina/server-mvp/org"
 	"github.com/cocina/server-mvp/types"
+	"github.com/cocina/server-mvp/version"
 	"github.com/gorilla/websocket"
 )
 
@@ -414,7 +415,7 @@ func (h *Hub) sendHello(client *Client, user *types.User) {
 	onlineIDs := h.onlineUserIDs()
 
 	payload := map[string]interface{}{
-		"server_version": "0.1.0-mvp",
+		"server_version": version.Version,
 		"server_mode":    "saas",
 		"session_id":     client.SessionID,
 		"user": map[string]interface{}{

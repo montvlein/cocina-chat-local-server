@@ -87,9 +87,13 @@ The server will start on `http://localhost:8090`
 | COCINA_AUTH_MODE | `dual` | `local`, `identity`, or `dual` (accept both token types) |
 | COCINA_SETUP_TOKEN | — | Token for `/admin` saves after initial setup (header `X-Setup-Token`) |
 
-### Exposición a internet (`/admin`)
+### Panel de administración (`/admin`)
 
-Panel en **http://localhost:8090/admin**. Copiá `.env.example` → `.env`.
+Panel en **http://localhost:8090/admin** con login de administrador.
+
+- La primera vez pide **crear el administrador** (cuenta owner).
+- Luego: resumen del servidor, usuarios/roles, invitaciones y configuración de red.
+- API admin bajo `/api/v1/admin/*` (requiere Bearer de cuenta admin/owner).
 
 **Docker solo chat:**
 ```bash

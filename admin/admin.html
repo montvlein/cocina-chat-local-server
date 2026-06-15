@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Cocina — Red e internet</title>
+  <title>Cocina — Administración</title>
   <style>
     :root {
       --bg: #0f1117; --bg2: #171a22; --bg3: #1e2230;
@@ -13,28 +13,26 @@
     }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: var(--sans); background: var(--bg); color: var(--text); line-height: 1.5; }
-    .wrap { max-width: 560px; margin: 0 auto; padding: 32px 20px 64px; }
+    .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; }
     h1 { margin: 0 0 8px; font-size: 26px; }
+    h2 { margin: 0 0 16px; font-size: 18px; }
     .lead { color: var(--muted); margin-bottom: 28px; }
-    .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 24px; }
+    .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
     label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
     label.inline { display: flex; align-items: center; gap: 8px; }
     label.inline input { width: auto; margin: 0; }
-    input[type="text"], input[type="url"], input[type="password"] {
+    input, select {
       width: 100%; margin-top: 6px; padding: 10px 12px;
       background: var(--bg3); border: 1px solid var(--line); border-radius: 8px;
-      color: var(--text); font-size: 14px;
+      color: var(--text); font-size: 14px; font-family: inherit;
     }
-    .modes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-    .mode {
-      display: flex; gap: 12px; align-items: flex-start;
-      padding: 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
-      background: var(--bg3);
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+    .tab {
+      padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--bg2); color: var(--muted); cursor: pointer; font-size: 14px;
     }
-    .mode:has(input:checked) { border-color: var(--accent); }
-    .mode input { width: auto; margin: 4px 0 0; }
-    .mode-title { font-weight: 600; }
-    .mode-desc { font-size: 13px; color: var(--muted); }
+    .tab.active { border-color: var(--accent); color: var(--text); background: var(--bg3); }
+    .hidden { display: none !important; }
     .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
     button {
       border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px;
@@ -42,97 +40,394 @@
     }
     .primary { background: var(--accent); color: #fff; font-weight: 600; }
     .ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+    .danger { background: transparent; color: var(--red); border: 1px solid var(--line); }
     .msg { font-size: 13px; margin-top: 12px; }
     .ok { color: var(--green); }
     .err { color: var(--red); }
     .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    details { margin-top: 16px; font-size: 13px; color: var(--muted); }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+    .user-pill { font-size: 13px; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; background: var(--bg3); }
+    .badge.owner { color: var(--accent); }
+    .badge.admin { color: var(--green); }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+    .stat { background: var(--bg3); border-radius: 8px; padding: 14px; }
+    .stat-label { font-size: 12px; color: var(--muted); }
+    .stat-value { font-size: 20px; font-weight: 600; margin-top: 4px; }
+    .modes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .mode {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--bg3);
+    }
+    .mode:has(input:checked) { border-color: var(--accent); }
+    .mode input { width: auto; margin: 4px 0 0; }
+    .mode-title { font-weight: 600; }
+    .mode-desc { font-size: 13px; color: var(--muted); }
+    details { margin-top: 12px; font-size: 13px; color: var(--muted); }
+    .invite-url { word-break: break-all; font-size: 12px; background: var(--bg3); padding: 10px; border-radius: 8px; margin-top: 8px; }
+    code { font-size: 12px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Conexión a internet</h1>
-    <p class="lead">Configurá la URL pública del servidor de chat.</p>
+    <!-- Invite registration -->
+    <div id="viewInvite" class="hidden">
+      <h1>Unirse a <span id="inviteOrgName">—</span></h1>
+      <p class="lead">Creá tu cuenta para unirte al servidor.</p>
+      <div class="card">
+        <label>Email <input id="invEmail" type="email" /></label>
+        <label>Usuario <input id="invUsername" type="text" /></label>
+        <label>Contraseña <input id="invPassword" type="password" /></label>
+        <div class="actions">
+          <button type="button" class="primary" id="btnInviteRegister">Registrarse</button>
+        </div>
+        <div id="invRegStatus" class="msg"></div>
+      </div>
+    </div>
 
-    <div class="card">
-      <div class="modes">
-        <label class="mode">
-          <input type="radio" name="mode" value="local" />
-          <div>
-            <div class="mode-title">Solo red local</div>
-            <div class="mode-desc">LAN o localhost.</div>
-          </div>
-        </label>
-        <label class="mode">
-          <input type="radio" name="mode" value="public" />
-          <div>
-            <div class="mode-title">Servidor público (VM)</div>
-            <div class="mode-desc">AWS, GCP, Azure con DNS y TLS.</div>
-          </div>
-        </label>
-        <label class="mode">
-          <input type="radio" name="mode" value="tunnel" />
-          <div>
-            <div class="mode-title">Cloudflare Tunnel</div>
-            <div class="mode-desc">PC local sin abrir puertos.</div>
-          </div>
-        </label>
+    <!-- Auth: bootstrap -->
+    <div id="viewBootstrap" class="hidden">
+      <h1>Configurar administrador</h1>
+      <p class="lead">No hay administrador todavía. Creá la cuenta que gestionará este servidor.</p>
+      <div class="card">
+        <label>Email <input id="bootEmail" type="email" autocomplete="email" /></label>
+        <label>Usuario <input id="bootUsername" type="text" autocomplete="username" /></label>
+        <label>Contraseña <input id="bootPassword" type="password" autocomplete="new-password" />
+          <span class="hint">Mínimo 8 caracteres</span></label>
+        <div class="actions">
+          <button type="button" class="primary" id="btnBootstrap">Crear administrador</button>
+        </div>
+        <div id="bootStatus" class="msg"></div>
+      </div>
+    </div>
+
+    <!-- Auth: login -->
+    <div id="viewLogin" class="hidden">
+      <h1>Administración</h1>
+      <p class="lead">Iniciá sesión con una cuenta de administrador.</p>
+      <div class="card">
+        <label>Email <input id="loginEmail" type="email" autocomplete="email" /></label>
+        <label>Contraseña <input id="loginPassword" type="password" autocomplete="current-password" /></label>
+        <div class="actions">
+          <button type="button" class="primary" id="btnLogin">Ingresar</button>
+        </div>
+        <div id="loginStatus" class="msg"></div>
+      </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="viewDashboard" class="hidden">
+      <div class="topbar">
+        <div>
+          <h1>Administración</h1>
+          <p class="lead" style="margin:0">Panel del servidor de chat</p>
+        </div>
+        <div>
+          <span class="user-pill" id="userPill"></span>
+          <button type="button" class="ghost" id="btnLogout" style="margin-left:8px">Salir</button>
+        </div>
       </div>
 
-      <label>
-        URL pública del servidor
-        <input id="publicBase" type="url" placeholder="https://chat.tudominio.com" />
-        <span class="hint">WebSocket: <code id="wsPreview">—</code></span>
-      </label>
-
-      <details>
-        <summary>Cocina Identity (opcional)</summary>
-        <label>
-          URL pública de Identity
-          <input id="identityUrl" type="url" placeholder="https://identity.tudominio.com" />
-        </label>
-        <label class="inline">
-          <input id="syncIdentity" type="checkbox" />
-          Sincronizar con Identity al guardar
-        </label>
-      </details>
-
-      <details id="tokenSection">
-        <summary>Token de setup (acceso remoto)</summary>
-        <label>
-          COCINA_SETUP_TOKEN
-          <input id="setupToken" type="password" placeholder="Solo si accedés por dominio público" />
-          <span class="hint">Desde localhost no hace falta. Se recuerda en este navegador.</span>
-        </label>
-      </details>
-
-      <div class="actions">
-        <button type="button" class="primary" id="btnSave">Guardar</button>
-        <button type="button" class="ghost" id="btnTest">Probar conexión</button>
+      <div class="tabs">
+        <button type="button" class="tab active" data-tab="overview">Resumen</button>
+        <button type="button" class="tab" data-tab="users">Usuarios</button>
+        <button type="button" class="tab" data-tab="invites">Invitaciones</button>
+        <button type="button" class="tab" data-tab="network">Red</button>
       </div>
-      <div id="status" class="msg"></div>
+
+      <!-- Overview -->
+      <div id="panelOverview" class="card">
+        <div class="stat-grid" id="statGrid"></div>
+      </div>
+
+      <!-- Users -->
+      <div id="panelUsers" class="card hidden">
+        <h2>Usuarios</h2>
+        <table>
+          <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th></tr></thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Invitations -->
+      <div id="panelInvites" class="card hidden">
+        <h2>Invitar usuarios</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label>Rol
+            <select id="invRole">
+              <option value="member">Miembro</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+          <label>Válida (días)
+            <input id="invDays" type="number" value="7" min="1" max="90" />
+          </label>
+        </div>
+        <div class="actions">
+          <button type="button" class="primary" id="btnCreateInvite">Generar invitación</button>
+        </div>
+        <div id="inviteResult" class="hidden">
+          <p class="hint">Compartí este enlace (válido una sola vez al crear la cuenta):</p>
+          <div class="invite-url" id="inviteUrl"></div>
+        </div>
+        <h2 style="margin-top:24px">Invitaciones activas</h2>
+        <table>
+          <thead><tr><th>Rol</th><th>Token</th><th>Usos</th><th>Expira</th><th></th></tr></thead>
+          <tbody id="invitesBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Network -->
+      <div id="panelNetwork" class="card hidden">
+        <h2>Conexión a internet</h2>
+        <div class="modes">
+          <label class="mode">
+            <input type="radio" name="mode" value="local" />
+            <div><div class="mode-title">Solo red local</div><div class="mode-desc">LAN o localhost.</div></div>
+          </label>
+          <label class="mode">
+            <input type="radio" name="mode" value="public" />
+            <div><div class="mode-title">Servidor público (VM)</div><div class="mode-desc">AWS, GCP, Azure con DNS y TLS.</div></div>
+          </label>
+          <label class="mode">
+            <input type="radio" name="mode" value="tunnel" />
+            <div><div class="mode-title">Cloudflare Tunnel</div><div class="mode-desc">PC local sin abrir puertos.</div></div>
+          </label>
+        </div>
+        <label>URL pública del servidor
+          <input id="publicBase" type="url" placeholder="https://api.tudominio.com" />
+          <span class="hint">WebSocket: <code id="wsPreview">—</code></span>
+        </label>
+        <details>
+          <summary>Cocina Identity (opcional)</summary>
+          <label>URL pública de Identity
+            <input id="identityUrl" type="url" placeholder="https://identity.tudominio.com" />
+          </label>
+          <label class="inline">
+            <input id="syncIdentity" type="checkbox" />
+            Sincronizar con Identity al guardar
+          </label>
+        </details>
+        <div class="actions">
+          <button type="button" class="primary" id="btnSaveNetwork">Guardar</button>
+          <button type="button" class="ghost" id="btnTestNetwork">Probar conexión</button>
+        </div>
+        <div id="networkStatus" class="msg"></div>
+      </div>
     </div>
   </div>
 
   <script>
-    const TOKEN_KEY = 'cocina_admin_setup_token'
+    const TOKEN_KEY = 'cocina_admin_token'
     const $ = (id) => document.getElementById(id)
-    const status = (text, ok) => {
-      $('status').textContent = text
-      $('status').className = 'msg ' + (ok ? 'ok' : 'err')
-    }
+    let token = localStorage.getItem(TOKEN_KEY) || ''
 
-    const savedToken = sessionStorage.getItem(TOKEN_KEY)
-    if (savedToken) $('setupToken').value = savedToken
-
-    function headers() {
+    function authHeaders() {
       const h = { 'Content-Type': 'application/json' }
-      const t = $('setupToken').value.trim()
-      if (t) h['X-Setup-Token'] = t
+      if (token) h['Authorization'] = 'Bearer ' + token
       return h
     }
 
-    function payload() {
+    function show(id) {
+      ['viewBootstrap', 'viewLogin', 'viewDashboard', 'viewInvite'].forEach(v => $(v).classList.add('hidden'))
+      $(id).classList.remove('hidden')
+    }
+
+    function setMsg(el, text, ok) {
+      el.textContent = text
+      el.className = 'msg ' + (ok ? 'ok' : 'err')
+    }
+
+    async function api(path, opts = {}) {
+      const res = await fetch('/api/v1/admin/' + path, { ...opts, headers: { ...authHeaders(), ...opts.headers } })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.error?.message || res.statusText)
+      return body.data
+    }
+
+    async function checkSession() {
+      const res = await fetch('/api/v1/admin/session', { headers: authHeaders() })
+      const body = await res.json()
+      const s = body.data
+      if (!s) return
+
+      if (s.needs_setup) {
+        show('viewBootstrap')
+        return
+      }
+      if (token && s.user && s.is_admin) {
+        show('viewDashboard')
+        $('userPill').textContent = s.user.username + ' (' + s.user.email + ')'
+        loadDashboard()
+        return
+      }
+      show('viewLogin')
+    }
+
+    $('btnBootstrap').addEventListener('click', async () => {
+      setMsg($('bootStatus'), 'Creando…', true)
+      try {
+        const res = await fetch('/api/v1/admin/bootstrap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: $('bootEmail').value.trim(),
+            username: $('bootUsername').value.trim(),
+            password: $('bootPassword').value,
+          }),
+        })
+        const body = await res.json()
+        if (!res.ok) throw new Error(body.error?.message || res.statusText)
+        token = body.access_token || body.accessToken
+        localStorage.setItem(TOKEN_KEY, token)
+        show('viewDashboard')
+        $('userPill').textContent = body.user.username
+        loadDashboard()
+      } catch (e) {
+        setMsg($('bootStatus'), e.message, false)
+      }
+    })
+
+    $('btnLogin').addEventListener('click', async () => {
+      setMsg($('loginStatus'), 'Ingresando…', true)
+      try {
+        const res = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: $('loginEmail').value.trim(),
+            password: $('loginPassword').value,
+          }),
+        })
+        const body = await res.json()
+        if (!res.ok) throw new Error(body.error?.message || 'Credenciales inválidas')
+        token = body.access_token || body.accessToken
+        localStorage.setItem(TOKEN_KEY, token)
+
+        const session = await fetch('/api/v1/admin/session', { headers: authHeaders() })
+        const sessBody = await session.json()
+        if (!sessBody.data?.is_admin) {
+          localStorage.removeItem(TOKEN_KEY)
+          token = ''
+          throw new Error('Esta cuenta no tiene permisos de administrador')
+        }
+        show('viewDashboard')
+        $('userPill').textContent = body.user.username + ' (' + body.user.email + ')'
+        loadDashboard()
+      } catch (e) {
+        setMsg($('loginStatus'), e.message, false)
+      }
+    })
+
+    $('btnLogout').addEventListener('click', () => {
+      localStorage.removeItem(TOKEN_KEY)
+      token = ''
+      show('viewLogin')
+    })
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+        tab.classList.add('active')
+        const name = tab.dataset.tab
+        ;['panelOverview', 'panelUsers', 'panelInvites', 'panelNetwork'].forEach(p => {
+          $(p).classList.toggle('hidden', p !== 'panel' + name.charAt(0).toUpperCase() + name.slice(1))
+        })
+        if (name === 'users') loadUsers()
+        if (name === 'invites') loadInvites()
+        if (name === 'network') loadNetwork()
+      })
+    })
+
+    async function loadDashboard() {
+      try {
+        const status = await api('status')
+        $('statGrid').innerHTML = `
+          <div class="stat"><div class="stat-label">Versión</div><div class="stat-value">${status.version}</div></div>
+          <div class="stat"><div class="stat-label">Usuarios</div><div class="stat-value">${status.user_count}</div></div>
+          <div class="stat"><div class="stat-label">Organización</div><div class="stat-value" style="font-size:16px">${status.org_name}</div></div>
+          <div class="stat"><div class="stat-label">Auth</div><div class="stat-value" style="font-size:16px">${status.auth_mode}</div></div>
+          <div class="stat"><div class="stat-label">Identity</div><div class="stat-value" style="font-size:16px">${status.identity_linked ? 'Vinculado' : 'No'}</div></div>
+          <div class="stat"><div class="stat-label">Red pública</div><div class="stat-value" style="font-size:14px">${status.public_base_url || '—'}</div></div>
+        `
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    async function loadUsers() {
+      const users = await api('users')
+      $('usersBody').innerHTML = users.map(u => `
+        <tr>
+          <td>${esc(u.username)}</td>
+          <td>${esc(u.email)}</td>
+          <td>
+            <select data-user="${u.id}" class="role-select" ${u.role === 'owner' ? 'disabled' : ''}>
+              <option value="member" ${u.role === 'member' ? 'selected' : ''}>Miembro</option>
+              <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+              <option value="owner" ${u.role === 'owner' ? 'selected' : ''}>Owner</option>
+            </select>
+          </td>
+          <td><span class="badge">${esc(u.presence_status || 'offline')}</span></td>
+        </tr>
+      `).join('')
+      document.querySelectorAll('.role-select').forEach(sel => {
+        sel.addEventListener('change', async () => {
+          try {
+            await fetch('/api/v1/admin/users/' + sel.dataset.user + '/role', {
+              method: 'PATCH',
+              headers: authHeaders(),
+              body: JSON.stringify({ role: sel.value }),
+            })
+          } catch (e) {
+            alert('No se pudo cambiar el rol')
+          }
+        })
+      })
+    }
+
+    async function loadInvites() {
+      const list = await api('invitations')
+      $('invitesBody').innerHTML = list.length ? list.map(i => `
+        <tr>
+          <td><span class="badge ${i.role}">${i.role}</span></td>
+          <td><code>${esc(i.token_prefix)}</code></td>
+          <td>${i.use_count}${i.max_uses ? '/' + i.max_uses : ''}</td>
+          <td>${i.expires_at ? new Date(i.expires_at).toLocaleDateString() : '—'}</td>
+          <td>${i.revoked ? 'Revocada' : `<button class="danger" data-revoke="${i.id}">Revocar</button>`}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="5" style="color:var(--muted)">Sin invitaciones</td></tr>'
+
+      document.querySelectorAll('[data-revoke]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await fetch('/api/v1/admin/invitations/' + btn.dataset.revoke, { method: 'DELETE', headers: authHeaders() })
+          loadInvites()
+        })
+      })
+    }
+
+    $('btnCreateInvite').addEventListener('click', async () => {
+      try {
+        const data = await api('invitations', {
+          method: 'POST',
+          body: JSON.stringify({
+            role: $('invRole').value,
+            expires_in_days: parseInt($('invDays').value, 10) || 7,
+            max_uses: 0,
+          }),
+        })
+        $('inviteResult').classList.remove('hidden')
+        $('inviteUrl').textContent = data.invite_url + '\n\nO registrarse en el chat con invite_token: ' + data.token
+        loadInvites()
+      } catch (e) {
+        alert(e.message)
+      }
+    })
+
+    function networkPayload() {
       return {
         exposure_mode: document.querySelector('input[name="mode"]:checked')?.value || 'local',
         public_base_url: $('publicBase').value.trim(),
@@ -141,20 +436,15 @@
       }
     }
 
-    function applySettings(s) {
-      document.querySelector(`input[name="mode"][value="${s.exposure_mode}"]`)?.click()
-      $('publicBase').value = s.public_base_url || ''
-      $('identityUrl').value = s.identity_public_url || ''
-      $('wsPreview').textContent = s.public_ws_url || '—'
-    }
-
-    async function load() {
+    async function loadNetwork() {
       try {
-        const res = await fetch('/api/v1/admin/network')
-        const body = await res.json()
-        if (body.data) applySettings(body.data)
+        const s = await api('network')
+        document.querySelector(`input[name="mode"][value="${s.exposure_mode}"]`)?.click()
+        $('publicBase').value = s.public_base_url || ''
+        $('identityUrl').value = s.identity_public_url || ''
+        $('wsPreview').textContent = s.public_ws_url || '—'
       } catch (e) {
-        status('No se pudo cargar la configuración', false)
+        setMsg($('networkStatus'), e.message, false)
       }
     }
 
@@ -166,52 +456,90 @@
         : v.startsWith('http://') ? 'ws://' + v.replace(/^http:\/\//, '') : v
     })
 
-    $('btnTest').addEventListener('click', async () => {
-      status('Probando…', true)
+    $('btnTestNetwork').addEventListener('click', async () => {
+      setMsg($('networkStatus'), 'Probando…', true)
       try {
         const res = await fetch('/api/v1/admin/network/test', {
-          method: 'POST', headers: headers(), body: JSON.stringify(payload()),
+          method: 'POST', headers: authHeaders(), body: JSON.stringify(networkPayload()),
         })
         const body = await res.json()
-        if (!res.ok) throw new Error(body.error?.message || res.statusText)
+        if (!res.ok) throw new Error(body.error?.message)
         const t = body.data
-        const idPart = t.identity_reachable ? ' · Identity: OK' : (t.identity_error ? ' · Identity: ' + t.identity_error : '')
-        status(
-          'Servidor: ' + (t.server_reachable ? 'OK' : 'FAIL' + (t.server_error ? ' (' + t.server_error + ')' : '')) + idPart,
+        setMsg($('networkStatus'),
+          'Servidor: ' + (t.server_reachable ? 'OK' : 'FAIL') +
+          (t.identity_reachable ? ' · Identity: OK' : ''),
           t.server_reachable,
         )
       } catch (e) {
-        status(e.message || 'Error en prueba', false)
+        setMsg($('networkStatus'), e.message, false)
       }
     })
 
-    $('btnSave').addEventListener('click', async () => {
-      status('Guardando…', true)
+    $('btnSaveNetwork').addEventListener('click', async () => {
+      setMsg($('networkStatus'), 'Guardando…', true)
       try {
-        const res = await fetch('/api/v1/admin/network', {
-          method: 'POST', headers: headers(), body: JSON.stringify(payload()),
+        const s = await api('network', { method: 'POST', body: JSON.stringify(networkPayload()) })
+        let msg = 'Configuración guardada.'
+        if (s.identity_sync_ok) msg += ' Sincronizado con Identity.'
+        else if (s.identity_sync_error) msg += ' Identity: ' + s.identity_sync_error
+        setMsg($('networkStatus'), msg, true)
+      } catch (e) {
+        setMsg($('networkStatus'), e.message, false)
+      }
+    })
+
+    function esc(s) {
+      const d = document.createElement('div')
+      d.textContent = s || ''
+      return d.innerHTML
+    }
+
+    // Invite link from URL ?invite=token
+    const inviteParam = new URLSearchParams(location.search).get('invite')
+
+    async function checkInvite() {
+      if (!inviteParam) return false
+      try {
+        const res = await fetch('/api/v1/invitations/' + encodeURIComponent(inviteParam))
+        const body = await res.json()
+        if (!body.data?.valid) {
+          show('viewInvite')
+          setMsg($('invRegStatus'), body.data?.invalid_reason || 'Invitación inválida', false)
+          return true
+        }
+        show('viewInvite')
+        $('inviteOrgName').textContent = body.data.org_name
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    $('btnInviteRegister').addEventListener('click', async () => {
+      setMsg($('invRegStatus'), 'Registrando…', true)
+      try {
+        const res = await fetch('/api/v1/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: $('invEmail').value.trim(),
+            username: $('invUsername').value.trim(),
+            password: $('invPassword').value,
+            invite_token: inviteParam,
+          }),
         })
         const body = await res.json()
-        if (!res.ok) {
-          if (res.status === 403) {
-            $('tokenSection').open = true
-            throw new Error(body.error?.message + ' — ingresá COCINA_SETUP_TOKEN si accedés por dominio público.')
-          }
-          throw new Error(body.error?.message || res.statusText)
-        }
-        const t = $('setupToken').value.trim()
-        if (t) sessionStorage.setItem(TOKEN_KEY, t)
-        applySettings(body.data)
-        let msg = 'Configuración guardada.'
-        if (body.data.identity_sync_ok) msg += ' Sincronizado con Identity.'
-        else if (body.data.identity_sync_error) msg += ' Identity: ' + body.data.identity_sync_error
-        status(msg, true)
+        if (!res.ok) throw new Error(body.error?.message || res.statusText)
+        setMsg($('invRegStatus'), 'Cuenta creada. Ya podés usar el chat.', true)
       } catch (e) {
-        status(e.message || 'No se pudo guardar', false)
+        setMsg($('invRegStatus'), e.message, false)
       }
     })
 
-    load()
+    ;(async () => {
+      if (await checkInvite()) return
+      checkSession()
+    })()
   </script>
 </body>
 </html>
