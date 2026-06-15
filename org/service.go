@@ -305,6 +305,74 @@ const (
 	settingIdentityOrgID = "identity_org_id"
 )
 
+func (s *Service) UpdateNetworkURLs(serverAPIURL, identityURL, deploymentMode string) error {
+	serverAPIURL = strings.TrimRight(serverAPIURL, "/")
+	s.serverURL = serverAPIURL
+	if identityURL != "" {
+		s.identityURL = strings.TrimRight(identityURL, "/")
+	}
+
+	linkedOrgID, _ := s.getLinkedIdentityOrgID()
+	if linkedOrgID != "" {
+		_, err := s.db.Exec(`
+			UPDATE organizations SET server_url = ?, deployment_mode = ? WHERE id = ?`,
+			serverAPIURL, deploymentMode, linkedOrgID,
+		)
+		return err
+	}
+
+	_, err := s.db.Exec(`
+		UPDATE organizations SET server_url = ?, deployment_mode = ?
+		WHERE server_url IS NULL OR server_url = '' OR server_url LIKE 'http://localhost%'`,
+		serverAPIURL, deploymentMode,
+	)
+	return err
+}
+
+func (s *Service) UserIsOrgAdmin(userID string) bool {
+	linkedOrgID, err := s.getLinkedIdentityOrgID()
+	if err != nil || linkedOrgID == "" {
+		var count int
+		_ = s.db.QueryRow(`
+			SELECT COUNT(*) FROM org_members
+			WHERE user_id = ? AND role IN ('owner', 'admin')`, userID,
+		).Scan(&count)
+		return count > 0
+	}
+
+	var role string
+	err = s.db.QueryRow(`
+		SELECT role FROM org_members WHERE user_id = ? AND org_id = ?`,
+		userID, linkedOrgID,
+	).Scan(&role)
+	if err != nil {
+		return false
+	}
+	return role == types.RoleOwner || role == types.RoleAdmin
+}
+
+func (s *Service) RegisterServerWithIdentity(serverAPIURL string) (*types.Organization, error) {
+	if s.identityURL == "" || s.identityAPIKey == "" {
+		return nil, fmt.Errorf("identity not configured (set COCINA_IDENTITY_URL and COCINA_IDENTITY_API_KEY)")
+	}
+	client := identityclient.New(s.identityURL, serverAPIURL, s.identityAPIKey)
+	org, err := client.RegisterServer()
+	if err != nil {
+		return nil, err
+	}
+	if err := s.EnsureIdentityOrg(org); err != nil {
+		return nil, err
+	}
+	return org, nil
+}
+
+func (s *Service) SetIdentityURL(url string) {
+	s.identityURL = strings.TrimRight(url, "/")
+}
+
+func (s *Service) ServerURL() string  { return s.serverURL }
+func (s *Service) IdentityURL() string { return s.identityURL }
+
 func (s *Service) getLinkedIdentityOrgID() (string, error) {
 	var value string
 	err := s.db.QueryRow(

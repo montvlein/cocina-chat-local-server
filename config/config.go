@@ -15,6 +15,7 @@ type Config struct {
 	IdentityJWKS   string
 	IdentityAPIKey string
 	AuthMode       string // local, identity, dual
+	SetupToken     string
 }
 
 const (
@@ -53,6 +54,7 @@ func Load() *Config {
 		IdentityJWKS:   identityJWKS,
 		IdentityAPIKey: getEnv("COCINA_IDENTITY_API_KEY", ""),
 		AuthMode:       authMode,
+		SetupToken:     getEnv("COCINA_SETUP_TOKEN", ""),
 	}
 }
 

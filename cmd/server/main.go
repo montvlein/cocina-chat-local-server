@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cocina/server-mvp/admin"
 	"github.com/cocina/server-mvp/config"
 	"github.com/cocina/server-mvp/database"
 	"github.com/cocina/server-mvp/handlers"
@@ -78,6 +79,12 @@ func main() {
 	// WebSocket endpoint for real-time messaging
 	mux.HandleFunc("/ws", apiHandlers.HandleWebSocket)
 
+	// Admin: network / internet exposure
+	mux.HandleFunc("/admin", admin.ServePage)
+	mux.HandleFunc("/admin/", admin.ServePage)
+	mux.HandleFunc("/api/v1/admin/network", apiHandlers.DispatchAdmin)
+	mux.HandleFunc("/api/v1/admin/network/", apiHandlers.DispatchAdmin)
+
 	// Health check
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -115,6 +122,7 @@ func main() {
 	}()
 
 	log.Printf("Cocina Server MVP starting on http://localhost%s", addr)
+	log.Printf("Admin network setup: http://localhost%s/admin", addr)
 	log.Printf("Database path: %s", cfg.DBPath)
 	if cfg.IdentityEnabled() {
 		log.Printf("Identity auth: %s (issuer=%s)", cfg.IdentityURL, cfg.IdentityIssuer)

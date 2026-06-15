@@ -1,26 +1,23 @@
 services:
-  # Cocina Server MVP - Go backend application
   cocina-server:
     build: .
     container_name: cocina-server
     ports:
       - "8090:8090"
     volumes:
-      # Mount SQLite database directory for persistence
       - ./data:/app/data
     env_file:
       - .env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     environment:
       - COCINA_PORT=8090
       - COCINA_DB_PATH=/app/data/cocina.db
-      - COCINA_SERVER_URL=http://localhost:8090/api/v1
+      - COCINA_SERVER_URL=${COCINA_SERVER_URL:-http://localhost:8090/api/v1}
       - COCINA_JWT_SECRET=${COCINA_JWT_SECRET:-cocina-mvp-secret-key-change-in-production}
-      - COCINA_IDENTITY_URL=${COCINA_IDENTITY_URL:-http://host.docker.internal:8080}
-      - COCINA_IDENTITY_ISSUER=${COCINA_IDENTITY_ISSUER:-http://localhost:8080}
+      - COCINA_AUTH_MODE=${COCINA_AUTH_MODE:-local}
+      - COCINA_IDENTITY_URL=${COCINA_IDENTITY_URL:-}
+      - COCINA_IDENTITY_ISSUER=${COCINA_IDENTITY_ISSUER:-}
       - COCINA_IDENTITY_API_KEY=${COCINA_IDENTITY_API_KEY:-}
-      - COCINA_AUTH_MODE=${COCINA_AUTH_MODE:-dual}
+      - COCINA_SETUP_TOKEN=${COCINA_SETUP_TOKEN:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/health"]
@@ -29,7 +26,16 @@ services:
       retries: 3
       start_period: 10s
 
-# Note: SQLite is a file-based database that doesn't run as a separate service.
-# The SQLite data directory is mounted via volumes above for persistence.
-# If you need a server-based database (PostgreSQL, MySQL), replace the volume mount
-# with an appropriate database service configuration.
+  # Cloudflare Tunnel — solo con: docker compose --profile tunnel up
+  # Configurá el hostname público en Zero Trust apuntando a http://cocina-server:8090
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    container_name: cocina-cloudflared
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    env_file:
+      - .env
+    depends_on:
+      cocina-server:
+        condition: service_healthy
+    restart: unless-stopped

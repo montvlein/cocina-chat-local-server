@@ -85,6 +85,23 @@ The server will start on `http://localhost:8090`
 | COCINA_IDENTITY_JWKS_URL | `{IDENTITY_URL}/.well-known/jwks.json` | JWKS endpoint override |
 | COCINA_IDENTITY_API_KEY | — | API key from Identity panel (`ck_...`) to link this server to an org |
 | COCINA_AUTH_MODE | `dual` | `local`, `identity`, or `dual` (accept both token types) |
+| COCINA_SETUP_TOKEN | — | Token for `/admin` saves after initial setup (header `X-Setup-Token`) |
+
+### Exposición a internet (`/admin`)
+
+Panel en **http://localhost:8090/admin**. Copiá `.env.example` → `.env`.
+
+**Docker solo chat:**
+```bash
+docker compose up --build
+```
+
+**Docker + Cloudflare Tunnel** (definí `CLOUDFLARE_TUNNEL_TOKEN` en `.env`, hostname → `http://cocina-server:8090`):
+```bash
+docker compose --profile tunnel up --build
+```
+
+Desde **localhost** podés guardar sin token. Desde el dominio público (túnel) hace falta `COCINA_SETUP_TOKEN` en el formulario si está configurado en `.env`.
 
 ### Identity integration
 

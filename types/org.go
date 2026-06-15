@@ -15,6 +15,8 @@ const (
 	DeploymentSaaS   = "saas"
 	DeploymentLocal  = "local"
 	DeploymentHybrid = "hybrid"
+	DeploymentPublic = "public"
+	DeploymentTunnel = "tunnel"
 )
 
 // Organization represents a tenant.
