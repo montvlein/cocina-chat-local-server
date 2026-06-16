@@ -11,6 +11,7 @@ const (
 type NetworkSettings struct {
 	ExposureMode      string      `json:"exposure_mode"`
 	PublicBaseURL     string      `json:"public_base_url"`
+	FrontendPublicURL string      `json:"frontend_public_url"`
 	PublicWSURL       string      `json:"public_ws_url"`
 	IdentityPublicURL string      `json:"identity_public_url"`
 	ServerAPIURL      string      `json:"server_api_url"`
@@ -44,6 +45,7 @@ type NetworkTestResult struct {
 type SaveNetworkInput struct {
 	ExposureMode      string `json:"exposure_mode"`
 	PublicBaseURL     string `json:"public_base_url"`
+	FrontendPublicURL string `json:"frontend_public_url"`
 	IdentityPublicURL string `json:"identity_public_url"`
 	SyncIdentity      bool   `json:"sync_identity"`
 }

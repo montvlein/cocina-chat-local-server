@@ -17,7 +17,7 @@ type CreateInvitationInput struct {
 	MaxUses       int
 }
 
-func (s *Service) CreateInvitation(orgID, userID, publicBaseURL string, in CreateInvitationInput) (*types.CreateInvitationResponse, error) {
+func (s *Service) CreateInvitation(orgID, userID, frontendURL, apiBaseURL string, in CreateInvitationInput) (*types.CreateInvitationResponse, error) {
 	if !s.UserIsOrgAdmin(userID) {
 		return nil, fmt.Errorf("forbidden")
 	}
@@ -62,11 +62,18 @@ func (s *Service) CreateInvitation(orgID, userID, publicBaseURL string, in Creat
 		return nil, err
 	}
 
-	base := strings.TrimRight(publicBaseURL, "/")
-	if base == "" {
-		base = strings.TrimSuffix(s.serverURL, "/api/v1")
+	frontendURL = strings.TrimRight(frontendURL, "/")
+	apiBaseURL = strings.TrimRight(apiBaseURL, "/")
+	if apiBaseURL == "" {
+		apiBaseURL = strings.TrimSuffix(s.serverURL, "/api/v1")
 	}
-	inviteURL := base + "/admin?invite=" + token
+
+	var inviteURL string
+	if frontendURL != "" {
+		inviteURL = frontendURL + "/?invite=" + token
+	} else {
+		inviteURL = apiBaseURL + "/admin?invite=" + token
+	}
 
 	inv := types.Invitation{
 		ID:          invID,

@@ -201,6 +201,10 @@
           <input id="publicBase" type="url" placeholder="https://api.tudominio.com" />
           <span class="hint">WebSocket: <code id="wsPreview">—</code></span>
         </label>
+        <label>URL pública del front (chat)
+          <input id="frontendUrl" type="url" placeholder="https://chat.tudominio.com" />
+          <span class="hint">Invitaciones y redirección tras registro. Local: http://localhost:3000</span>
+        </label>
         <details>
           <summary>Cocina Identity (opcional)</summary>
           <label>URL pública de Identity
@@ -351,6 +355,7 @@
           <div class="stat"><div class="stat-label">Organización</div><div class="stat-value" style="font-size:16px">${status.org_name}</div></div>
           <div class="stat"><div class="stat-label">Auth</div><div class="stat-value" style="font-size:16px">${status.auth_mode}</div></div>
           <div class="stat"><div class="stat-label">Identity</div><div class="stat-value" style="font-size:16px">${status.identity_linked ? 'Vinculado' : 'No'}</div></div>
+          <div class="stat"><div class="stat-label">Front</div><div class="stat-value" style="font-size:14px">${status.frontend_public_url || '—'}</div></div>
           <div class="stat"><div class="stat-label">Red pública</div><div class="stat-value" style="font-size:14px">${status.public_base_url || '—'}</div></div>
         `
       } catch (e) {
@@ -431,6 +436,7 @@
       return {
         exposure_mode: document.querySelector('input[name="mode"]:checked')?.value || 'local',
         public_base_url: $('publicBase').value.trim(),
+        frontend_public_url: $('frontendUrl').value.trim(),
         identity_public_url: $('identityUrl').value.trim(),
         sync_identity: $('syncIdentity').checked,
       }
@@ -441,6 +447,7 @@
         const s = await api('network')
         document.querySelector(`input[name="mode"][value="${s.exposure_mode}"]`)?.click()
         $('publicBase').value = s.public_base_url || ''
+        $('frontendUrl').value = s.frontend_public_url || ''
         $('identityUrl').value = s.identity_public_url || ''
         $('wsPreview').textContent = s.public_ws_url || '—'
       } catch (e) {
@@ -496,12 +503,21 @@
 
     // Invite link from URL ?invite=token
     const inviteParam = new URLSearchParams(location.search).get('invite')
+    let inviteFrontendUrl = ''
+
+    function redirectToFront(accessToken, frontendUrl) {
+      if (!frontendUrl || !accessToken) return false
+      const base = frontendUrl.replace(/\/$/, '')
+      window.location.href = base + '/?token=' + encodeURIComponent(accessToken)
+      return true
+    }
 
     async function checkInvite() {
       if (!inviteParam) return false
       try {
         const res = await fetch('/api/v1/invitations/' + encodeURIComponent(inviteParam))
         const body = await res.json()
+        inviteFrontendUrl = body.data?.frontend_public_url || ''
         if (!body.data?.valid) {
           show('viewInvite')
           setMsg($('invRegStatus'), body.data?.invalid_reason || 'Invitación inválida', false)
@@ -530,6 +546,8 @@
         })
         const body = await res.json()
         if (!res.ok) throw new Error(body.error?.message || res.statusText)
+        const accessToken = body.access_token
+        if (redirectToFront(accessToken, inviteFrontendUrl)) return
         setMsg($('invRegStatus'), 'Cuenta creada. Ya podés usar el chat.', true)
       } catch (e) {
         setMsg($('invRegStatus'), e.message, false)

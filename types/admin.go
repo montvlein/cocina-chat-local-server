@@ -17,7 +17,8 @@ type AdminStatus struct {
 	UserCount       int    `json:"user_count"`
 	OrgName         string `json:"org_name"`
 	NetworkSetup    bool   `json:"network_setup_complete"`
-	PublicBaseURL   string `json:"public_base_url,omitempty"`
+	PublicBaseURL     string `json:"public_base_url,omitempty"`
+	FrontendPublicURL string `json:"frontend_public_url,omitempty"`
 }
 
 type AdminUser struct {
@@ -51,10 +52,11 @@ type CreateInvitationResponse struct {
 }
 
 type InvitationPreview struct {
-	OrgID         string     `json:"org_id"`
-	OrgName       string     `json:"org_name"`
-	Role          string     `json:"role"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-	Valid         bool       `json:"valid"`
-	InvalidReason string     `json:"invalid_reason,omitempty"`
+	OrgID             string     `json:"org_id"`
+	OrgName           string     `json:"org_name"`
+	Role              string     `json:"role"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	Valid             bool       `json:"valid"`
+	InvalidReason     string     `json:"invalid_reason,omitempty"`
+	FrontendPublicURL string     `json:"frontend_public_url,omitempty"`
 }

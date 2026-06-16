@@ -169,6 +169,7 @@ func (h *APIHandler) GetAdminStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	if netSettings != nil {
 		status.PublicBaseURL = netSettings.PublicBaseURL
+		status.FrontendPublicURL = netSettings.FrontendPublicURL
 	}
 
 	h.writeData(w, http.StatusOK, status)
@@ -279,12 +280,14 @@ func (h *APIHandler) CreateAdminInvitation(w http.ResponseWriter, r *http.Reques
 
 	store := network.NewStore(h.db)
 	settings, _ := store.Load(h.cfg.ServerURL, h.cfg.IdentityURL)
-	publicBase := ""
+	frontendURL := ""
+	apiBase := ""
 	if settings != nil {
-		publicBase = settings.PublicBaseURL
+		frontendURL = settings.FrontendPublicURL
+		apiBase = settings.PublicBaseURL
 	}
 
-	resp, err := h.orgSvc.CreateInvitation(orgID, userID, publicBase, org.CreateInvitationInput{
+	resp, err := h.orgSvc.CreateInvitation(orgID, userID, frontendURL, apiBase, org.CreateInvitationInput{
 		Role:          req.Role,
 		ExpiresInDays: req.ExpiresInDays,
 		MaxUses:       req.MaxUses,
@@ -462,6 +465,12 @@ func (h *APIHandler) PreviewInvitation(w http.ResponseWriter, r *http.Request, t
 		h.writeAPIError(w, r, "NOT_FOUND", err.Error(), http.StatusNotFound)
 		return
 	}
+
+	store := network.NewStore(h.db)
+	if settings, err := store.Load(h.cfg.ServerURL, h.cfg.IdentityURL); err == nil && settings != nil {
+		preview.FrontendPublicURL = settings.FrontendPublicURL
+	}
+
 	h.writeData(w, http.StatusOK, preview)
 }
 
@@ -477,5 +486,14 @@ func (h *APIHandler) AcceptInvitation(w http.ResponseWriter, r *http.Request, to
 		return
 	}
 
-	h.writeData(w, http.StatusOK, map[string]bool{"accepted": true})
+	redirectURL := ""
+	store := network.NewStore(h.db)
+	if settings, err := store.Load(h.cfg.ServerURL, h.cfg.IdentityURL); err == nil && settings != nil {
+		redirectURL = settings.FrontendPublicURL
+	}
+
+	h.writeData(w, http.StatusOK, map[string]interface{}{
+		"accepted":     true,
+		"redirect_url": redirectURL,
+	})
 }

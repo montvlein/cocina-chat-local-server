@@ -12,8 +12,9 @@ import (
 
 const (
 	keyExposureMode      = "network_exposure_mode"
-	keyPublicBaseURL     = "network_public_base_url"
-	keyIdentityPublicURL = "network_identity_public_url"
+	keyPublicBaseURL       = "network_public_base_url"
+	keyFrontendPublicURL = "network_frontend_public_url"
+	keyIdentityPublicURL   = "network_identity_public_url"
 	keySetupComplete     = "network_setup_complete"
 	keyLastSyncAt        = "network_last_sync_at"
 	keyLastHealthOK      = "network_last_health_ok"
@@ -98,6 +99,7 @@ func ValidateExposureMode(mode string) error {
 func (s *Store) Load(defaultServerURL, defaultIdentityURL string) (*types.NetworkSettings, error) {
 	mode, _ := s.GetSetting(keyExposureMode)
 	baseURL, _ := s.GetSetting(keyPublicBaseURL)
+	frontendURL, _ := s.GetSetting(keyFrontendPublicURL)
 	identityURL, _ := s.GetSetting(keyIdentityPublicURL)
 	setupComplete, _ := s.GetSetting(keySetupComplete)
 	lastSync, _ := s.GetSetting(keyLastSyncAt)
@@ -122,6 +124,7 @@ func (s *Store) Load(defaultServerURL, defaultIdentityURL string) (*types.Networ
 	return &types.NetworkSettings{
 		ExposureMode:      mode,
 		PublicBaseURL:     baseURL,
+		FrontendPublicURL: NormalizeBaseURL(frontendURL),
 		PublicWSURL:       wsURL,
 		IdentityPublicURL: identityURL,
 		ServerAPIURL:      apiURL,
@@ -143,6 +146,7 @@ func (s *Store) Save(input types.SaveNetworkInput, defaultServerURL, defaultIden
 	}
 
 	baseURL := NormalizeBaseURL(input.PublicBaseURL)
+	frontendURL := NormalizeBaseURL(input.FrontendPublicURL)
 	identityURL := NormalizeBaseURL(input.IdentityPublicURL)
 
 	if input.ExposureMode == types.ExposureLocal {
@@ -161,6 +165,9 @@ func (s *Store) Save(input types.SaveNetworkInput, defaultServerURL, defaultIden
 		return nil, err
 	}
 	if err := s.SetSetting(keyPublicBaseURL, baseURL); err != nil {
+		return nil, err
+	}
+	if err := s.SetSetting(keyFrontendPublicURL, frontendURL); err != nil {
 		return nil, err
 	}
 	if err := s.SetSetting(keyIdentityPublicURL, identityURL); err != nil {
