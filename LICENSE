@@ -1,70 +1,63 @@
-Cocina Server — Licencia de uso dual
-=====================================
+Cocina Server — Dual Use License
+================================
 
 Copyright (c) 2026 Fabricio Montivero
 
-Se concede permiso para usar, copiar, modificar y distribuir este software
-sujeto a las condiciones siguientes.
+Permission is granted to use, copy, modify, and distribute this software
+subject to the following conditions.
 
-## 1. Uso gratuito (sin costo de licencia)
+## 1. Free use (no license fee)
 
-Podés usar, modificar y desplegar este software **sin pagar licencia** cuando:
+You may use, modify, and deploy this software **without paying a license fee**
+when:
 
-- El servicio se ofrece **gratis** a los usuarios finales (sin cobro por acceso,
-  suscripción ni uso del chat).
-- Es uso personal, educativo, de investigación o por una organización sin fines
-  de lucro.
-- No se cobra dinero directamente por el producto o servicio que incluye este
+- The service is offered **free of charge** to end users (no payment for access,
+  subscriptions, or use of the chat service).
+- It is personal, educational, research, or non-profit organizational use.
+- No money is charged directly for the product or service that includes this
   software.
 
-En estos casos debés conservar este aviso de copyright y la licencia en las
-copias que distribuyas del código fuente.
+In these cases you must retain this copyright notice and license in source
+copies you distribute.
 
-## 2. Uso comercial (servicios de pago)
+## 2. Commercial use (paid services)
 
-Si utilizás este software como parte de un producto o servicio **de pago**
-(incluye, sin limitarse a: SaaS comercial, suscripciones, venta de acceso,
-marketplace, o cualquier modelo donde los usuarios paguen por usar el servicio),
-debés cumplir **una** de estas opciones:
+If you use this software as part of a **paid** product or service (including
+but not limited to: commercial SaaS, subscriptions, paid access, marketplaces,
+or any model where users pay to use the service), you must satisfy **one** of
+the following:
 
-### Opción A — Atribución visible
+### Option A — Visible attribution
 
-Mostrar de forma **clara, permanente y visible** para los usuarios finales:
+Display the following **clearly, permanently, and visibly** to end users:
 
-> Desarrollado con [Cocina Server](https://github.com/TU_USUARIO/servidor-local)
-> por Fabricio Montivero
+> Powered by [Cocina Server](https://github.com/montvlein/cocina-chat-local-server) by
+> Fabricio Montivero
 
-La atribución debe aparecer al menos en:
-- La interfaz principal del producto (por ejemplo, pie de página o pantalla
-  "Acerca de"), y
-- La documentación pública o página de inicio del servicio.
+Attribution must appear at least in:
+- The main product interface (e.g. footer or About screen), and
+- Public documentation or the service landing page.
 
-### Opción B — Licencia comercial
+### Option B — Commercial license
 
-Contactar al titular del copyright y obtener una **licencia comercial de pago**
-por escrito. Con licencia comercial vigente no es obligatoria la atribución
-pública de la Opción A.
+Contact the copyright holder and obtain a **paid commercial license** in writing.
+With a valid commercial license, public attribution under Option A is not
+required.
 
-Contacto para licencias comerciales: [tu-email@ejemplo.com]
+Commercial licensing contact: montvlein@gmail.com
 
-## 3. Restricciones
+## 3. Restrictions
 
-- No podés eliminar ni ocultar este aviso de copyright del código fuente
-  distribuido.
-- No podés usar el nombre "Cocina" o el nombre del autor para endorsar un
-  producto derivado sin permiso escrito.
-- Las contribuciones de terceros al repositorio se licencian bajo los mismos
-  términos, salvo acuerdo explícito en contrario.
+- You may not remove or conceal this copyright notice from distributed source
+  code.
+- You may not use the copyright holder's name to endorse or promote a derived
+  product without prior written permission.
+- Third-party contributions to the repository are licensed under these same
+  terms unless explicitly agreed otherwise.
 
-## 4. Sin garantía
+## 4. No warranty
 
-EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O
-IMPLÍCITA, INCLUYENDO PERO NO LIMITADO A GARANTÍAS DE COMERCIABILIDAD,
-IDONEIDAD PARA UN PROPÓSITO PARTICULAR Y NO INFRACCIÓN. EN NINGÚN CASO LOS
-AUTORES SERÁN RESPONSABLES POR DAÑOS DERIVADOS DEL USO DEL SOFTWARE.
-
----
-
-English summary (non-binding): Free for free services; paid/commercial use
-requires prominent attribution to the author OR a paid commercial license.
-See sections 1–2 above for the binding terms (Spanish).
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
+BE LIABLE FOR ANY DAMAGES ARISING FROM USE OF THE SOFTWARE.
