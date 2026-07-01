@@ -260,4 +260,22 @@ PocketBase has built-in real-time subscriptions that can replace the custom WebS
 
 ## License
 
-Internal use only - Cocina Project
+This project is licensed under the **Cocina Server Dual Use License** (custom;
+not OSI-approved). See [LICENSE](LICENSE) for the full text.
+
+**Free use (no license fee)** — You may use, modify, and deploy this software
+when the service is offered free of charge to end users, or for personal,
+educational, research, or non-profit use. Keep the copyright notice and license
+in distributed source copies.
+
+**Commercial use (paid services)** — If you offer a paid product or service
+(SaaS, subscriptions, paid access, etc.), you must either:
+
+- **Option A:** Display visible attribution to end users (*"Powered by
+  [Cocina Server](https://github.com/montvlein/cocina-chat-local-server) by
+  Fabricio Montivero"* in the UI and public docs), or
+- **Option B:** Obtain a [commercial license](mailto:montvlein@gmail.com) in
+  writing from the copyright holder.
+
+Copyright (c) 2026 Fabricio Montivero. The software is provided "AS IS", without
+warranty of any kind.
