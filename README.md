@@ -225,39 +225,6 @@ curl http://localhost:8090/api/v1/messages/history?limit=50 \
   -H "Authorization: Bearer <access_token>"
 ```
 
-## Future Migration to PocketBase
-
-This MVP is designed with future migration in mind. The key considerations for migrating to PocketBase include:
-
-### 1. Database Abstraction Layer
-
-The current `database/` package provides a simple abstraction. When migrating to PocketBase, you can replace the SQLite implementation with PocketBase's embedded database while keeping the same interface.
-
-### 2. User Management
-
-PocketBase handles user authentication natively. The migration path involves:
-- Removing custom auth service (`auth/service.go`)
-- Using PocketBase's built-in auth endpoints
-- Adapting token handling to use PocketBase's JWT system
-
-### 3. Data Collections
-
-When migrating, create PocketBase collections that match the current schema:
-```json
-{
-  "name": "users",
-  "schema": {
-    "email": {"type": "email"},
-    "username": {"type": "text"},
-    "display_name": {"type": "text"}
-  }
-}
-```
-
-### 4. Real-time Features
-
-PocketBase has built-in real-time subscriptions that can replace the custom WebSocket hub implementation.
-
 ## License
 
 This project is licensed under the **Cocina Server Dual Use License** (custom;
