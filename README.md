@@ -1,6 +1,6 @@
-# Cocina Server MVP
+# Cocina Server
 
-MVP backend for the Cocina real-time collaboration platform, built in Go with SQLite. This is a temporary solution designed to be migrated to PocketBase or a custom architecture in the future.
+Self-hosted real-time chat backend for the Cocina collaboration platform. Built in Go with SQLite, WebSockets, organizations/workspaces/channels, an admin panel, and optional integration with Cocina Identity.
 
 ## Architecture Overview
 
@@ -9,55 +9,59 @@ MVP backend for the Cocina real-time collaboration platform, built in Go with SQ
 │   Client     │────▶│  Cocina Server   │────▶│    SQLite   │
 │  (Web/Mobile)│◀────│  (Go + WebSocket)│◀────│   Database  │
 └──────────────┘     └──────────────────┘      └─────────────┘
-                         │
-                         ▼
-                   ┌─────────────┐
-                   │ WebSocket   │
-                   │ Hub         │
-                   └─────────────┘
+        │                    │
+        │                    ├── /admin (built-in panel)
+        │                    └── optional ──▶ Cocina Identity (JWKS)
+        ▼
+   WebSocket Hub (presence, typing, live messages)
 ```
 
 ## Project Structure
 
 ```
-servidor-mvp/
-├── cmd/server/main.go          # Application entry point
-├── config/config.go           # Configuration management
-├── types/types.go             # Data models and DTOs
-├── database/database.go       # Database layer (SQLite)
-├── auth/
-│   ├── jwt.go                 # Token generation/validation
-│   └── service.go             # Authentication logic
-├── messaging/
-│   ├── service.go             # Message CRUD operations
-│   └── websocket.go           # WebSocket hub and real-time messaging
-├── handlers/handlers.go       # HTTP request handlers
-├── Dockerfile                 # Container configuration
-└── README.md                  # This file
+servidor-local/
+├── cmd/server/main.go       # Application entry point
+├── config/                  # Environment configuration
+├── types/                   # Data models and DTOs
+├── database/                # SQLite layer and migrations
+├── auth/                    # JWT, local auth, identity validation
+├── org/                     # Organizations, workspaces, channels, invites
+├── messaging/               # Messages, DMs, WebSocket hub
+├── network/                 # Public URL / tunnel settings
+├── handlers/                # HTTP API handlers and routing
+├── admin/                   # Embedded admin UI (/admin)
+├── identityclient/          # Cocina Identity server registration
+├── version/                 # Server version constant
+├── Dockerfile
+├── docker-compose.yml       # Server-only compose (optional tunnel)
+└── README.md
 ```
 
-## Features (MVP)
+## Features
 
-- User registration and login with JWT authentication
-- REST API for sending and retrieving messages
-- WebSocket support for real-time messaging
-- SQLite database for data persistence
-- Graceful shutdown handling
+- User registration and login with JWT (local auth)
+- Optional Cocina Identity integration (`local`, `identity`, or `dual` auth modes)
+- Organizations, workspaces, channels, and direct messages (DMs)
+- REST API for channel messages and legacy 1:1 messaging
+- WebSocket hub for real-time messages, presence, and typing indicators
+- Built-in admin panel at `/admin` (bootstrap owner, users/roles, invitations, network)
+- Invite links with token preview, registration via `invite_token`, and accept flow
+- Network settings (public API/WS URLs, frontend URL, health probe, Cloudflare tunnel)
+- SQLite persistence, CORS, graceful shutdown, `/health` endpoint
 
 ## Getting Started
 
 ### Prerequisites
 
 - Go 1.21+
-- SQLite3 (for local development)
-- Docker (optional, for containerized deployment)
+- Docker (optional)
 
 ### Local Development
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
-cd PROYECTOS/Cocina/servidor-mvp
+git clone https://github.com/montvlein/cocina-chat-local-server.git
+cd cocina-chat-local-server
 ```
 
 2. Install dependencies:
@@ -65,58 +69,76 @@ cd PROYECTOS/Cocina/servidor-mvp
 go mod download
 ```
 
-3. Run the server:
+3. Copy environment file and run:
 ```bash
+cp .env.example .env
 go run ./cmd/server/
 ```
 
-The server will start on `http://localhost:8090`
+The server starts at `http://localhost:8090`.
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| COCINA_PORT | 8090 | HTTP server port |
-| COCINA_DB_PATH | ./data/cocina.db | SQLite database path |
-| COCINA_SERVER_URL | `http://localhost:{PORT}/api/v1` | Public API URL (used when registering with Identity) |
-| COCINA_JWT_SECRET | cocina-mvp-secret-key-change-in-production | Local auth token secret (legacy/dual mode) |
-| COCINA_IDENTITY_URL | — | Base URL of cocina-identity (e.g. `http://localhost:8080`) |
-| COCINA_IDENTITY_ISSUER | same as `COCINA_IDENTITY_URL` | Expected JWT `iss` claim |
-| COCINA_IDENTITY_JWKS_URL | `{IDENTITY_URL}/.well-known/jwks.json` | JWKS endpoint override |
-| COCINA_IDENTITY_API_KEY | — | API key from Identity panel (`ck_...`) to link this server to an org |
-| COCINA_AUTH_MODE | `dual` | `local`, `identity`, or `dual` (accept both token types) |
-| COCINA_SETUP_TOKEN | — | Token for `/admin` saves after initial setup (header `X-Setup-Token`) |
+| `COCINA_PORT` | `8090` | HTTP server port |
+| `COCINA_DB_PATH` | `./data/cocina.db` | SQLite database path |
+| `COCINA_SERVER_URL` | `http://localhost:{PORT}/api/v1` | Public API base URL |
+| `COCINA_JWT_SECRET` | *(dev default)* | Secret for local JWT signing |
+| `COCINA_AUTH_MODE` | `dual` if Identity URL set, else `local` | `local`, `identity`, or `dual` |
+| `COCINA_IDENTITY_URL` | — | Base URL of Cocina Identity |
+| `COCINA_IDENTITY_ISSUER` | same as `COCINA_IDENTITY_URL` | Expected JWT `iss` claim |
+| `COCINA_IDENTITY_JWKS_URL` | `{IDENTITY_URL}/.well-known/jwks.json` | JWKS endpoint override |
+| `COCINA_IDENTITY_API_KEY` | — | API key (`ck_...`) to link this server to an org |
+| `COCINA_SETUP_TOKEN` | — | Required for remote `/admin` saves via tunnel (`X-Setup-Token`) |
 
-### Panel de administración (`/admin`)
+See `.env.example` for a minimal local setup.
 
-Panel en **http://localhost:8090/admin** con login de administrador.
+### Admin Panel (`/admin`)
 
-- La primera vez pide **crear el administrador** (cuenta owner).
-- Luego: resumen del servidor, usuarios/roles, invitaciones y configuración de red.
-- API admin bajo `/api/v1/admin/*` (requiere Bearer de cuenta admin/owner).
+Open **http://localhost:8090/admin**.
 
-**Docker solo chat:**
+- On first run: create the **owner** administrator account.
+- After setup: server status, users/roles, invitations, and network configuration.
+- Admin API under `/api/v1/admin/*` (Bearer token from an admin/owner account).
+
+From **localhost**, network settings can be saved without a setup token. From a public domain (e.g. Cloudflare Tunnel), set `COCINA_SETUP_TOKEN` in `.env` and send it as `X-Setup-Token` when saving.
+
+### Docker
+
+**This repo only** (API server):
+
 ```bash
 docker compose up --build
 ```
 
-**Docker + Cloudflare Tunnel** (definí `CLOUDFLARE_TUNNEL_TOKEN` en `.env`, hostname → `http://cocina-server:8090`):
+**With Cloudflare Tunnel** (set `CLOUDFLARE_TUNNEL_TOKEN` in `.env`; map hostname → `http://cocina-server:8090`):
+
 ```bash
 docker compose --profile tunnel up --build
 ```
 
-Desde **localhost** podés guardar sin token. Desde el dominio público (túnel) hace falta `COCINA_SETUP_TOKEN` en el formulario si está configurado en `.env`.
+**Full stack** (server + web client + optional tunnel/identity) from the monorepo root (`../`):
 
-### Identity integration
+```bash
+cd ..
+docker compose up --build
+# tunnel:  docker compose --profile tunnel up --build
+# identity: docker compose --profile identity up --build
+```
+
+With tunnel on the full stack, map `api.*` → `http://cocina-server:8090` and `chat.*` → `http://cocina-web:80`.
+
+### Identity Integration
 
 When `COCINA_IDENTITY_URL` is set:
 
-1. On startup, if `COCINA_IDENTITY_API_KEY` is configured, the server calls `POST /api/v1/server/register` on Identity and syncs the linked org locally (workspace + `#general` channel).
-2. Requests with a Bearer JWT from Identity are validated via JWKS (RS256).
-3. On first access, users are **lazy-provisioned** locally with `global_identity_id = JWT.sub` and added to the linked org.
-4. Local register/login still works in `dual` mode for development.
+1. On startup, if `COCINA_IDENTITY_API_KEY` is set, the server registers via `POST /api/v1/server/register` on Identity and syncs the linked org locally (workspace + `#general` channel).
+2. Identity JWTs are validated via JWKS (RS256).
+3. Users are lazy-provisioned on first access (`global_identity_id = JWT.sub`).
+4. In `dual` mode, local register/login still works for development.
 
-Example `.env` for Docker alongside Identity:
+Example `.env`:
 
 ```bash
 COCINA_IDENTITY_URL=http://host.docker.internal:8080
@@ -125,64 +147,89 @@ COCINA_IDENTITY_API_KEY=ck_your_key_from_identity_panel
 COCINA_AUTH_MODE=dual
 ```
 
-**Note:** `COCINA_IDENTITY_ISSUER` must match the issuer embedded in JWT tokens (check Identity's `COCINA_IDENTITY_ISSUER` env).
-
-### Docker Deployment
-
-Build and run with Docker:
-```bash
-docker build -t cocina-server .
-docker run -p 8090:8090 -v $(pwd)/data:/data cocina-server
-```
-
-Or using docker-compose:
-```yaml
-version: '3.8'
-services:
-  cocina-server:
-    build: .
-    ports:
-      - "8090:8090"
-    volumes:
-      - ./data:/data
-    environment:
-      - COCINA_PORT=8090
-      - COCINA_JWT_SECRET=your-secret-key-here
-```
+`COCINA_IDENTITY_ISSUER` must match the issuer in Identity JWT tokens.
 
 ## API Endpoints
+
+### Health
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Liveness check |
 
 ### Authentication
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/auth/register` | Register a new user |
-| POST | `/api/v1/auth/login` | Login and get tokens |
+| POST | `/api/v1/auth/register` | Register user (`invite_token` optional) |
+| POST | `/api/v1/auth/login` | Login and receive tokens |
 | POST | `/api/v1/auth/refresh` | Refresh access token |
-| POST | `/api/v1/auth/logout` | Logout and invalidate session |
+| POST | `/api/v1/auth/logout` | Invalidate session |
 
 ### Users
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/v1/users/me` | Get current user profile |
+| GET | `/api/v1/users/me` | Current user profile |
+| PATCH | `/api/v1/users/me/presence` | Update presence status |
 
-### Messages
+### Organizations & Channels
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/v1/messages/send` | Send a message |
-| GET | `/api/v1/messages/history?limit=50&before=msg_id` | Get message history |
+| GET | `/api/v1/orgs` | List organizations for the current user |
+| GET | `/api/v1/orgs/{orgId}/workspaces` | List workspaces in an org |
+| GET | `/api/v1/workspaces/{workspaceId}/channels` | List channels in a workspace |
+| POST | `/api/v1/workspaces/{workspaceId}/dms` | Create or get a DM channel |
+| GET | `/api/v1/channels/{channelId}/messages` | Channel message history (`limit`, `before`/`cursor`) |
+| POST | `/api/v1/channels/{channelId}/messages` | Send a message to a channel |
+
+### Messages (legacy 1:1)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/messages/send` | Send message (`receiver_id` and/or `channel_id`) |
+| GET | `/api/v1/messages/history` | Direct message history (`limit`, `before`) |
+| GET | `/api/v1/conversations` | List DM conversations |
+
+### Invitations
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/invitations/{token}` | Preview invitation (public) |
+| POST | `/api/v1/invitations/{token}/accept` | Accept invitation (authenticated) |
+
+### Admin API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/admin/session` | Setup state and current admin session |
+| POST | `/api/v1/admin/bootstrap` | Create first owner (only when no admin exists) |
+| GET | `/api/v1/admin/status` | Server summary (admin) |
+| GET | `/api/v1/admin/users` | List org members |
+| PATCH | `/api/v1/admin/users/{userId}/role` | Update member role |
+| GET | `/api/v1/admin/invitations` | List invitations |
+| POST | `/api/v1/admin/invitations` | Create invitation |
+| DELETE | `/api/v1/admin/invitations/{id}` | Revoke invitation |
+| GET | `/api/v1/admin/network` | Get network settings |
+| POST | `/api/v1/admin/network` | Save network settings |
+| POST | `/api/v1/admin/network/test` | Probe reachability |
 
 ### WebSocket
 
 | Protocol | Endpoint | Description |
 |----------|----------|-------------|
-| WS | `ws://localhost:8090/ws` | Real-time messaging |
+| WS | `/ws` | Real-time messaging (Bearer token) |
+
+### Admin UI
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/admin` | Embedded administration panel |
 
 ## API Examples
 
-### Register a User
+### Register
 
 ```bash
 curl -X POST http://localhost:8090/api/v1/auth/register \
@@ -190,38 +237,27 @@ curl -X POST http://localhost:8090/api/v1/auth/register \
   -d '{
     "email": "user@example.com",
     "username": "johndoe",
-    "password": "securepassword123"
+    "password": "securepassword123",
+    "invite_token": "optional-invite-token"
   }'
 ```
 
-### Login
+### Send a Channel Message
 
 ```bash
-curl -X POST http://localhost:8090/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "securepassword123"
-  }'
-```
-
-### Send a Message
-
-```bash
-curl -X POST http://localhost:8090/api/v1/messages/send \
+curl -X POST http://localhost:8090/api/v1/channels/{channelId}/messages \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <access_token>" \
   -d '{
-    "receiver_id": "user2_id",
-    "content": "Hello!",
+    "content": "Hello channel!",
     "content_type": "text"
   }'
 ```
 
-### Get Message History
+### Get Channel History
 
 ```bash
-curl http://localhost:8090/api/v1/messages/history?limit=50 \
+curl "http://localhost:8090/api/v1/channels/{channelId}/messages?limit=50" \
   -H "Authorization: Bearer <access_token>"
 ```
 
