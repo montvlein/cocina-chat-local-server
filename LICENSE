@@ -1,0 +1,70 @@
+Cocina Server — Licencia de uso dual
+=====================================
+
+Copyright (c) 2026 Fabricio Montivero
+
+Se concede permiso para usar, copiar, modificar y distribuir este software
+sujeto a las condiciones siguientes.
+
+## 1. Uso gratuito (sin costo de licencia)
+
+Podés usar, modificar y desplegar este software **sin pagar licencia** cuando:
+
+- El servicio se ofrece **gratis** a los usuarios finales (sin cobro por acceso,
+  suscripción ni uso del chat).
+- Es uso personal, educativo, de investigación o por una organización sin fines
+  de lucro.
+- No se cobra dinero directamente por el producto o servicio que incluye este
+  software.
+
+En estos casos debés conservar este aviso de copyright y la licencia en las
+copias que distribuyas del código fuente.
+
+## 2. Uso comercial (servicios de pago)
+
+Si utilizás este software como parte de un producto o servicio **de pago**
+(incluye, sin limitarse a: SaaS comercial, suscripciones, venta de acceso,
+marketplace, o cualquier modelo donde los usuarios paguen por usar el servicio),
+debés cumplir **una** de estas opciones:
+
+### Opción A — Atribución visible
+
+Mostrar de forma **clara, permanente y visible** para los usuarios finales:
+
+> Desarrollado con [Cocina Server](https://github.com/TU_USUARIO/servidor-local)
+> por Fabricio Montivero
+
+La atribución debe aparecer al menos en:
+- La interfaz principal del producto (por ejemplo, pie de página o pantalla
+  "Acerca de"), y
+- La documentación pública o página de inicio del servicio.
+
+### Opción B — Licencia comercial
+
+Contactar al titular del copyright y obtener una **licencia comercial de pago**
+por escrito. Con licencia comercial vigente no es obligatoria la atribución
+pública de la Opción A.
+
+Contacto para licencias comerciales: [tu-email@ejemplo.com]
+
+## 3. Restricciones
+
+- No podés eliminar ni ocultar este aviso de copyright del código fuente
+  distribuido.
+- No podés usar el nombre "Cocina" o el nombre del autor para endorsar un
+  producto derivado sin permiso escrito.
+- Las contribuciones de terceros al repositorio se licencian bajo los mismos
+  términos, salvo acuerdo explícito en contrario.
+
+## 4. Sin garantía
+
+EL SOFTWARE SE PROPORCIONA "TAL CUAL", SIN GARANTÍA DE NINGÚN TIPO, EXPRESA O
+IMPLÍCITA, INCLUYENDO PERO NO LIMITADO A GARANTÍAS DE COMERCIABILIDAD,
+IDONEIDAD PARA UN PROPÓSITO PARTICULAR Y NO INFRACCIÓN. EN NINGÚN CASO LOS
+AUTORES SERÁN RESPONSABLES POR DAÑOS DERIVADOS DEL USO DEL SOFTWARE.
+
+---
+
+English summary (non-binding): Free for free services; paid/commercial use
+requires prominent attribution to the author OR a paid commercial license.
+See sections 1–2 above for the binding terms (Spanish).

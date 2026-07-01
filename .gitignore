@@ -1,5 +1,6 @@
 # Binaries
 cocina-server
+server
 *.exe
 *.exe~
 *.dll
